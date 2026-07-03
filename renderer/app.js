@@ -446,7 +446,8 @@ function esc(s) {
 /*  시안 의뢰서 PDF용 HTML 생성 (여러 간판 항목 · 업무지시서 형태)            */
 /* ==================================================================== */
 function buildBriefHTML(data) {
-  const { form: f, signItems, images, createdAt } = data;
+  const { form: f, signItems, images, createdAt, companyName } = data;
+  const brandLabel = companyName || "Signplus+"; // 회사 정보(Company Settings)의 이름을 자동 반영, 미설정 시 Signplus+
   const rows = (signItems || []).map((s, idx) => `
     <tr>
       <td class="c num">${idx + 1}</td>
@@ -490,7 +491,7 @@ function buildBriefHTML(data) {
   </style></head>
   <body><div class="mid">
     <div class="head">
-      <div><div class="brand">SIGNPLUS+</div><h1>시안 제작 의뢰서</h1><div class="sub">DESIGN BRIEF ORDER</div></div>
+      <div><div class="brand">${esc(brandLabel)}</div><h1>시안 제작 의뢰서</h1><div class="sub">DESIGN BRIEF ORDER</div></div>
       <div class="meta">작성일 : ${esc(createdAt || todayISO())}<br/>거래처 : ${esc(f.client || "-")}<br/>업종 : ${esc(f.industry || "-")}</div>
     </div>
 
@@ -499,8 +500,8 @@ function buildBriefHTML(data) {
 
     <div class="section-title">디자인 방향</div>
     <table class="meta-tbl">
-      <tr><td class="k">브랜드 컬러</td><td><span class="swatch" style="background:${esc(f.brandColor)}"></span>${esc(f.brandColor)}</td></tr>
-      <tr><td class="k">폰트 느낌</td><td>${esc(f.fontMood)}</td></tr>
+      <tr><td class="k">테마</td><td><span class="swatch" style="background:${esc(f.brandColor)}"></span>${esc(f.brandColor)}</td></tr>
+      <tr><td class="k">견적서 스타일</td><td>${esc(f.fontMood)}</td></tr>
     </table>
 
     <div class="section-title">간판 제작 항목 (총 ${(signItems || []).length}건)</div>
@@ -935,9 +936,12 @@ function QuoteCalculator(props) {
 const SIGN_TYPES = ["채널간판 (전면발광)", "채널간판 (후면발광)", "플렉스 간판", "갈바 레이저 타공 간판", "아크릴 간판", "스테인리스 입체 간판", "LED 미디어월", "현수막 / 배너"];
 const FONT_MOODS = ["모던 산세리프", "클래식 세리프", "캘리그라피 / 손글씨", "고딕 볼드", "미니멀 라이트"];
 
+const SIGNPLUS_THEME_COLOR = "#FF6B35"; // 기본 테마("Signplus+") 색상 — PDF 브랜드 표기에 쓰는 색과 동일
+
 function DesignBrief(props) {
   const t = props.theme;
-  const emptyForm = { client: "", industry: "", location: "", brandColor: "#1D1D1F", fontMood: FONT_MOODS[0], installNote: "" };
+  const companyName = (props.company && props.company.name) || "Signplus+"; // 회사 정보 미설정 시 기본값
+  const emptyForm = { client: "", industry: "", location: "", brandColor: SIGNPLUS_THEME_COLOR, fontMood: FONT_MOODS[0], installNote: "" };
   const emptySignItem = () => ({ id: uid(), signType: SIGN_TYPES[0], width: "", height: "", location: "", dayEffect: "", nightEffect: "" });
   const [f, setF] = useState(emptyForm);
   const [signItems, setSignItems] = useState([emptySignItem()]);
@@ -989,15 +993,15 @@ function DesignBrief(props) {
   const removeSignItem = (id) => setSignItems((p) => (p.length > 1 ? p.filter((s) => s.id !== id) : p));
   const updateSignItem = (id, k, v) => setSignItems((p) => p.map((s) => (s.id === id ? { ...s, [k]: v } : s)));
 
-  const briefText = `[Signplus+ 시안 제작 의뢰서]
+  const briefText = `[${companyName} 시안 제작 의뢰서]
 
 ■ 거래처 : ${f.client || "-"}
 ■ 업종 : ${f.industry || "-"}
 ■ 건물/설치 위치 : ${f.location || "-"}
 
 [디자인 방향]
-- 브랜드 컬러 : ${f.brandColor}
-- 폰트 느낌 : ${f.fontMood}
+- 테마 : ${f.brandColor}
+- 견적서 스타일 : ${f.fontMood}
 
 [간판 제작 항목] (총 ${signItems.length}건)
 ${signItems.map((s, idx) => `${idx + 1}. ${s.signType} — ${s.width || "-"}×${s.height || "-"}mm / 위치: ${s.location || "-"}
@@ -1021,7 +1025,7 @@ ${images.length ? `\n[첨부 이미지] ${images.length}장 (앱에 저장됨)` 
   const handleNew = () => { setF(emptyForm); setSignItems([emptySignItem()]); setImages([]); setEditingId(null); flash("새 의뢰서"); };
   const handleDelete = async (id) => { await persist(saved.filter((r) => r.id !== id)); if (editingId === id) handleNew(); };
   const handlePdf = async () => {
-    const html = buildBriefHTML({ form: f, signItems, images, createdAt: todayISO() });
+    const html = buildBriefHTML({ form: f, signItems, images, createdAt: todayISO(), companyName });
     try {
       const res = await window.api.exportPdf(html, (f.client || "시안의뢰서") + "_" + todayISO());
       if (res && res.ok) flash("PDF 저장 완료");
@@ -1046,16 +1050,17 @@ ${images.length ? `\n[첨부 이미지] ${images.length}장 (앱에 저장됨)` 
     h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.xl } }, [
       Card(t, { key: 1, style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
         h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
-          Field(t, "거래처", TextInput(t, { value: f.client, onChange: set("client"), placeholder: "예: 서민막국수" })),
+          Field(t, "거래처", TextInput(t, { value: f.client, onChange: set("client"), placeholder: "예: Signplus+" })),
           Field(t, "업종", TextInput(t, { value: f.industry, onChange: set("industry"), placeholder: "예: 음식점" })),
         ]),
         Field(t, "건물 / 설치 위치", TextInput(t, { value: f.location, onChange: set("location"), placeholder: "예: 건물 정면 파사드 전체" })),
         h("div", { key: 5, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
-          Field(t, "브랜드 컬러", h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center" } }, [
+          Field(t, "테마", h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center" } }, [
             h("input", { key: 1, type: "color", value: f.brandColor, onChange: set("brandColor"), style: { width: 40, height: 36, border: `1px solid ${t.divider}`, borderRadius: DS.radius.sm, padding: 0, background: "none" } }),
             TextInput(t, { value: f.brandColor, onChange: set("brandColor"), style: { flex: 1, fontFamily: MONO } }),
+            Btn(t, { key: 3, variant: "ghost", title: "기본 테마(Signplus+)로 재설정", onClick: () => setF((p) => ({ ...p, brandColor: SIGNPLUS_THEME_COLOR })), style: { whiteSpace: "nowrap", padding: `${DS.spacing.sm}px ${DS.spacing.md}px`, fontSize: DS.font.size.xs } }, "Signplus+"),
           ])),
-          Field(t, "폰트 느낌", Sel(t, { value: f.fontMood, onChange: set("fontMood") }, FONT_MOODS)),
+          Field(t, "견적서 스타일", Sel(t, { value: f.fontMood, onChange: set("fontMood") }, FONT_MOODS)),
         ]),
         Field(t, "시공 참고사항", TextArea(t, { value: f.installNote, onChange: set("installNote"), rows: 3, placeholder: "여백, 고정 방식, 하지 작업 등" })),
         // 이미지 첨부
@@ -2439,7 +2444,7 @@ function App() {
     // 콘텐츠
     h("div", { key: "main", style: { flex: 1, padding: DS.spacing.xxxl + DS.spacing.xs, overflowY: "auto" } }, [
       tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, presetLabel, vendors, loadVendorPresets, openQuoteId, onOpenQuoteHandled: () => setOpenQuoteId(null) }),
-      tab === "brief" && h(DesignBrief, { key: "b", theme: t }),
+      tab === "brief" && h(DesignBrief, { key: "b", theme: t, company }),
       tab === "led" && h(LedCalculator, { key: "l", theme: t }),
       tab === "dashboard" && h(ProjectDashboard, { key: "d", theme: t, onOpenQuote: openQuoteInCalculator }),
       tab === "db" && h(DatabaseManager, { key: "db", theme: t, presets, onPresetsChange: changePresets, presetLabel, onPresetLabelChange: changePresetLabel, vendors, onAddVendor: addVendor, onRemoveVendor: removeVendor, loadVendorPresets, saveVendorPresets }),
