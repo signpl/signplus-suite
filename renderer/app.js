@@ -543,6 +543,8 @@ function QuoteCalculator(props) {
   const [editingId, setEditingId] = useState(null);
   const [selectedVendor, setSelectedVendor] = useState("jeil"); // 거래처 ID
   const [vendorPresets, setVendorPresets] = useState([]); // 현재 선택 거래처 단가
+  const [linkedProjectId, setLinkedProjectId] = useState(""); // 연결 프로젝트(quote.projectId)
+  const [projectsForLink, setProjectsForLink] = useState([]);
 
   // 견적번호 자동 생성: SP-YYYY-NNNN (연도별 순번)
   const genQuoteNo = (existing) => {
@@ -557,6 +559,12 @@ function QuoteCalculator(props) {
     loadKey("sp2-quotes", []).then((v) => { setSaved(v); setLoaded(true); setQuoteNo(genQuoteNo(v)); });
     loadKey("sp2-brand", {}).then((b) => { if (b.logo) setLogo(b.logo); if (b.stamp) setStamp(b.stamp); });
     loadKey("sp2-pdf-theme", "classic").then(setPdfTheme);
+    loadKey("sp2-projects", []).then(setProjectsForLink);
+    const onProjectsChanged = (e) => {
+      if (e && e.detail && e.detail.key === "sp2-projects") loadKey("sp2-projects", []).then(setProjectsForLink);
+    };
+    window.addEventListener("sp-storage-changed", onProjectsChanged);
+    return () => window.removeEventListener("sp-storage-changed", onProjectsChanged);
   }, []);
   useEffect(() => { setVendorPresets(presets); }, [presets]); // 기본 거래처 단가 동기화
   const changePdfTheme = (v) => { setPdfTheme(v); saveKey("sp2-pdf-theme", v); };
@@ -585,18 +593,28 @@ function QuoteCalculator(props) {
   const clearStamp = async () => { setStamp(null); const b = await loadKey("sp2-brand", {}); delete b.stamp; await saveKey("sp2-brand", b); };
 
   const handleSave = async () => {
-    const rec = { id: editingId || uid(), quoteNo, client, projectName, quoteDate, validity, note, items, marginRate, subtotal, vat, total, baseSubtotal, marginAmount, status: quoteStatus, vendorId: selectedVendor, savedAt: new Date().toISOString() };
+    const rec = { id: editingId || uid(), quoteNo, client, projectName, quoteDate, validity, note, items, marginRate, subtotal, vat, total, baseSubtotal, marginAmount, status: quoteStatus, vendorId: selectedVendor, projectId: linkedProjectId || null, savedAt: new Date().toISOString() };
     const next = editingId ? saved.map((r) => (r.id === editingId ? rec : r)) : [rec, ...saved].slice(0, 200);
     await saveKey("sp2-quotes", next); setSaved(next); flash("견적 저장 완료");
     if (!editingId) { setEditingId(rec.id); setQuoteNo(genQuoteNo(next)); }
+    await syncLinkedProjectStatus(rec); // 이 견적에 연결된 프로젝트가 있으면 상태를 즉시 동기화
   };
   const handleLoad = (r) => {
     setClient(r.client || { name: r.clientName || "", manager: "", tel: "" });
     setProjectName(r.projectName); setQuoteNo(r.quoteNo || genQuoteNo(saved)); setQuoteDate(r.quoteDate || todayISO());
     setValidity(r.validity || ""); setNote(r.note || ""); setItems(r.items); setMarginRate(Number(r.marginRate) || 0);
-    setQuoteStatus(r.status || "작성중"); setSelectedVendor(r.vendorId || "jeil"); setEditingId(r.id); flash("불러왔습니다");
+    setQuoteStatus(r.status || "작성중"); setSelectedVendor(r.vendorId || "jeil"); setLinkedProjectId(r.projectId || ""); setEditingId(r.id); flash("불러왔습니다");
   };
   const handleDelete = async (id) => { const next = saved.filter((r) => r.id !== id); await saveKey("sp2-quotes", next); setSaved(next); if (editingId === id) setEditingId(null); };
+
+  // 프로젝트 대시보드에서 "이 견적 열기"로 진입한 경우 — 지정된 견적을 자동으로 불러온다.
+  useEffect(() => {
+    if (props.openQuoteId && loaded) {
+      const r = saved.find((s) => s.id === props.openQuoteId);
+      if (r) handleLoad(r);
+      if (props.onOpenQuoteHandled) props.onOpenQuoteHandled();
+    }
+  }, [props.openQuoteId, loaded]);
 
   // 견적서(PDF·엑셀)에는 원가가 아닌 마진 반영된 판매단가로 출력
   const exportItems = () => items.map((i) => ({ ...i, unitPrice: sellPrice(i) }));
@@ -720,6 +738,7 @@ function QuoteCalculator(props) {
             Field(t, "견적일자", TextInput(t, { type: "date", value: quoteDate, onChange: (e) => setQuoteDate(e.target.value) })),
             Field(t, "유효기간", TextInput(t, { value: validity, onChange: (e) => setValidity(e.target.value) })),
             Field(t, "상태", Sel(t, { value: quoteStatus, onChange: (e) => setQuoteStatus(e.target.value), style: { fontWeight: DS.font.weight.bold, color: quoteStatus === "완료" ? t.green : quoteStatus === "진행중" ? t.accent : quoteStatus === "발주" ? t.blue : t.muted } }, [{ value: "작성중", label: "📝 작성중" }, { value: "발주", label: "📋 발주" }, { value: "진행중", label: "🔨 진행중" }, { value: "완료", label: "✅ 완료" }])),
+            Field(t, "연결 프로젝트", Sel(t, { value: linkedProjectId, onChange: (e) => setLinkedProjectId(e.target.value) }, [{ value: "", label: "선택 안함" }, ...projectsForLink.map((p) => ({ value: p.id, label: `${p.client ? p.client + " · " : ""}${p.name || "(제목 없음)"}` }))])),
           ]),
         ]),
         // 우: 수신처
@@ -1506,6 +1525,52 @@ function DatabaseManager(props) {
 /* ==================================================================== */
 const STATUSES = ["상담중", "견적발송", "계약", "시공중", "완료"];
 
+// 견적 상태(작성중/발주/진행중/완료) → 프로젝트 칸반 상태 매핑.
+// 견적의 status가 프로젝트/상단 진행현황 모두가 참조하는 단일 기준값(SQLite sp2-quotes)이며,
+// 이 매핑 하나로 양쪽 표시를 항상 일치시킨다 (별도 상태 필드를 새로 두지 않는다).
+const mapQuoteStatus = (s) => {
+  if (!s) return "상담중";
+  const st = String(s).trim();
+  if (st === "작성중" || /draft/i.test(st)) return "상담중";
+  if (st === "발주" || st === "견적발송") return "견적발송";
+  if (st === "계약") return "계약";
+  if (st === "진행중" || st === "시공중") return "시공중";
+  if (st === "완료") return "완료";
+  return "상담중";
+};
+
+// 견적 저장 시 호출 — 이 견적과 연결된 프로젝트(quote.projectId가 1순위, project.quoteId는 구버전 호환용)가
+// 있으면 그 프로젝트의 status를 견적 상태에 맞춰 갱신하고 저장한다(IPC storage.set 경유).
+// 연결된 프로젝트가 없으면 아무 일도 하지 않음 — 견적과 연결되지 않은 프로젝트의 기존 상태 관리(칸반 이동 버튼)는 그대로 유지된다.
+async function syncLinkedProjectStatus(quote) {
+  if (!quote || !quote.id) return;
+  const mapped = mapQuoteStatus(quote.status);
+  const projects = await loadKey("sp2-projects", []);
+  let changed = false;
+  const next = projects.map((p) => {
+    const linked = p.id === quote.projectId || p.quoteId === quote.id;
+    if (linked && p.status !== mapped) {
+      changed = true;
+      return { ...p, status: mapped, ...(mapped === "완료" ? { completedAt: todayISO() } : {}) };
+    }
+    return p;
+  });
+  if (changed) await saveKey("sp2-projects", next);
+}
+
+// 프로젝트에 연결된 견적 목록 — quote.projectId(신규, 1:N)를 1순위로 사용하고,
+// 아직 견적 쪽에 projectId가 없는 구버전 데이터는 project.quoteId(1:1)로 하나만 폴백 조회한다.
+function quotesForProject(project, allQuotes) {
+  const list = allQuotes || [];
+  const byProjectId = list.filter((q) => q.projectId === project.id);
+  if (byProjectId.length) return byProjectId;
+  if (project.quoteId) {
+    const legacy = list.find((q) => q.id === project.quoteId);
+    return legacy ? [legacy] : [];
+  }
+  return [];
+}
+
 function BarChart(t, data) {
   // data: [{label, value}]
   const max = Math.max(1, ...data.map((d) => d.value));
@@ -1553,12 +1618,28 @@ function ProjectDashboard(props) {
           const q = await loadKey("sp2-quotes", []);
           setQuotes(q || []);
         }
+        // 견적 상태 변경 시 연결된 프로젝트의 status가 다른 곳(견적 화면)에서 갱신될 수 있으므로
+        // sp2-projects 변경도 반영한다 (대시보드가 열려 있는 동안 즉시 동기화).
+        if (k === "sp2-projects") {
+          const p = await loadKey("sp2-projects", []);
+          setProjects(p || []);
+        }
       } catch (err) { }
     };
     window.addEventListener("sp-storage-changed", onStorageChanged);
     return () => window.removeEventListener("sp-storage-changed", onStorageChanged);
   }, []);
   const persist = async (next) => { setProjects(next); await saveKey("sp2-projects", next); };
+
+  // 신규 구조: 견적 쪽에 projectId를 새겨 quote.projectId(1:N)를 연결의 기준으로 삼는다.
+  // project.quoteId는 구버전 호환 표시용으로만 계속 저장한다.
+  const linkQuoteToProject = async (quoteId, projectId) => {
+    if (!quoteId) return;
+    const list = await loadKey("sp2-quotes", []);
+    const next = list.map((q) => (q.id === quoteId ? { ...q, projectId } : q));
+    await saveKey("sp2-quotes", next);
+    setQuotes(next);
+  };
 
   const addProject = () => {
     if (!form.client && !form.name) return;
@@ -1569,6 +1650,7 @@ function ProjectDashboard(props) {
     } else {
       const proj = { id: uid(), ...form, amount: Number(form.amount) || 0, status: "상담중", createdAt: todayISO(), quoteId: selectedQuoteId || null, favorite: false };
       persist([proj, ...projects]);
+      if (selectedQuoteId) linkQuoteToProject(selectedQuoteId, proj.id);
     }
     setForm(emptyProjectForm);
     setSelectedQuoteId("");
@@ -1608,18 +1690,8 @@ function ProjectDashboard(props) {
   const totalMargin = totalSellAmount - totalBaseCost;
   const avgMarginRate = totalBaseCost > 0 ? Math.round((totalMargin / totalBaseCost) * 100) : 0;
 
-  // 견적 상태별 집계: 상담중, 견적발송, 계약, 시공중, 완료
+  // 견적 상태별 집계: 상담중, 견적발송, 계약, 시공중, 완료 (매핑은 모듈 상단 mapQuoteStatus 공용 함수 사용)
   const quoteStatusCounts = { 상담중: 0, 견적발송: 0, 계약: 0, 시공중: 0, 완료: 0 };
-  const mapQuoteStatus = (s) => {
-    if (!s) return "상담중";
-    const st = String(s).trim();
-    if (st === "작성중" || /draft/i.test(st)) return "상담중";
-    if (st === "발주" || st === "견적발송") return "견적발송";
-    if (st === "계약") return "계약";
-    if (st === "진행중" || st === "시공중") return "시공중";
-    if (st === "완료") return "완료";
-    return "상담중";
-  };
   (quotes || []).forEach((q) => { try { const k = mapQuoteStatus(q && q.status); quoteStatusCounts[k] = (quoteStatusCounts[k] || 0) + 1; } catch (e) { } });
 
   // 기존 프로젝트 통계
@@ -1833,21 +1905,40 @@ function ProjectDashboard(props) {
             ]),
             h("div", { key: 2, style: { position: "relative", marginTop: DS.spacing.sm, fontSize: DS.font.size.base, fontFamily: MONO, fontWeight: DS.font.weight.bold, color: t.accent } }, won(p.amount)),
             p.deadline && h("div", { key: 3, style: { position: "relative", fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xs } }, "마감 " + p.deadline),
-            p.quoteId && (() => {
-              const linked = quotes.find((q) => q.id === p.quoteId);
-              return linked && h("div", { key: "linked-quote", style: { position: "relative", fontSize: DS.font.size.xs, color: t.blue, marginTop: DS.spacing.xs, display: "flex", alignItems: "center", gap: DS.spacing.xs } }, [Ico.file({ size: 11 }), `연결된 견적: ${linked.quoteNo || linked.id}`]);
+            (() => {
+              const linkedQuotes = quotesForProject(p, quotes);
+              return linkedQuotes.length > 0 && h("div", { key: "linked-quote", style: { position: "relative", fontSize: DS.font.size.xs, color: t.blue, marginTop: DS.spacing.xs, display: "flex", alignItems: "center", gap: DS.spacing.xs } }, [Ico.file({ size: 11 }), `연결된 견적 ${linkedQuotes.length}건`]);
             })(),
-            expanded && h("div", { key: "expand", style: { position: "relative", marginTop: DS.spacing.md, display: "flex", flexDirection: "column", gap: DS.spacing.sm } }, [
-              TextArea(t, { value: p.memo || "", onChange: (e) => updateProjectField(p.id, "memo", e.target.value), placeholder: "메모 추가...", rows: 2, style: { fontSize: DS.font.size.sm } }),
-              h("div", { key: "tags", style: { display: "flex", gap: DS.spacing.xs, alignItems: "center" } },
-                COLOR_TAG_KEYS.map((ck) => h("button", {
-                  key: ck || "none",
-                  title: ck || "태그 없음",
-                  onClick: () => updateProjectField(p.id, "colorTag", ck),
-                  style: { width: 16, height: 16, borderRadius: DS.radius.pill, cursor: "pointer", padding: 0, background: ck ? COLOR_TAG_MAP[ck] : "transparent", border: (p.colorTag || "") === ck ? `2px solid ${t.ink}` : `1px solid ${t.divider}` },
-                }))
-              ),
-            ]),
+            expanded && (() => {
+              const linkedQuotes = quotesForProject(p, quotes);
+              const latestQuote = linkedQuotes[0];
+              return h("div", { key: "expand", style: { position: "relative", marginTop: DS.spacing.md, display: "flex", flexDirection: "column", gap: DS.spacing.md } }, [
+                // 고객정보 — 프로젝트 자체의 거래처명 + (있다면) 최근 연결 견적의 담당자·연락처
+                h("div", { key: "customer", style: { fontSize: DS.font.size.xs, color: t.muted, display: "flex", flexDirection: "column", gap: 2 } }, [
+                  h("div", { key: 1 }, `고객: ${p.client || "-"}`),
+                  latestQuote && latestQuote.client && (latestQuote.client.manager || latestQuote.client.tel) && h("div", { key: 2 }, `담당자 ${latestQuote.client.manager || "-"} · ${latestQuote.client.tel || "-"}`),
+                ]),
+                // 견적목록 — 이 프로젝트에 연결된 모든 견적(quote.projectId 기준)
+                linkedQuotes.length > 0 && h("div", { key: "quotes", style: { display: "flex", flexDirection: "column", gap: DS.spacing.xs } },
+                  linkedQuotes.map((q) => h("div", {
+                    key: q.id,
+                    style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: DS.spacing.xs, fontSize: DS.font.size.xs, padding: `${DS.spacing.xs}px ${DS.spacing.sm}px`, background: t.surface2, borderRadius: DS.radius.sm },
+                  }, [
+                    h("span", { key: 1, style: { color: t.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, `${q.quoteNo || "-"} · ${mapQuoteStatus(q.status)} · ${won(q.total || 0)}`),
+                    h("button", { key: 2, onClick: () => props.onOpenQuote && props.onOpenQuote(q.id), style: { border: "none", background: "none", cursor: "pointer", color: t.accent, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, whiteSpace: "nowrap" } }, "열기"),
+                  ]))
+                ),
+                TextArea(t, { value: p.memo || "", onChange: (e) => updateProjectField(p.id, "memo", e.target.value), placeholder: "메모 추가...", rows: 2, style: { fontSize: DS.font.size.sm } }),
+                h("div", { key: "tags", style: { display: "flex", gap: DS.spacing.xs, alignItems: "center" } },
+                  COLOR_TAG_KEYS.map((ck) => h("button", {
+                    key: ck || "none",
+                    title: ck || "태그 없음",
+                    onClick: () => updateProjectField(p.id, "colorTag", ck),
+                    style: { width: 16, height: 16, borderRadius: DS.radius.pill, cursor: "pointer", padding: 0, background: ck ? COLOR_TAG_MAP[ck] : "transparent", border: (p.colorTag || "") === ck ? `2px solid ${t.ink}` : `1px solid ${t.divider}` },
+                  }))
+                ),
+              ]);
+            })(),
             h("div", { key: 4, style: { position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: DS.spacing.lg } }, [
               h("div", { key: "move", style: { display: "flex", gap: DS.spacing.xs } }, [
                 h("button", { key: 1, disabled: status === STATUSES[0], onClick: () => move(p.id, -1), style: { background: "none", border: "none", cursor: "pointer", color: t.muted, opacity: status === STATUSES[0] ? 0.3 : 1 } }, Ico.left({ size: 16 })),
@@ -2092,6 +2183,8 @@ function App() {
   const [license, setLicense] = useState(null); // null=확인중, {activated:bool}
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  const [openQuoteId, setOpenQuoteId] = useState(null);
+  const openQuoteInCalculator = (quoteId) => { setOpenQuoteId(quoteId); setTab("quote"); };
 
   const checkLicense = async () => {
     if (window.license && window.license.status) {
@@ -2242,10 +2335,10 @@ function App() {
     ]),
     // 콘텐츠
     h("div", { key: "main", style: { flex: 1, padding: DS.spacing.xxxl + DS.spacing.xs, overflowY: "auto" } }, [
-      tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, presetLabel, vendors, loadVendorPresets }),
+      tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, presetLabel, vendors, loadVendorPresets, openQuoteId, onOpenQuoteHandled: () => setOpenQuoteId(null) }),
       tab === "brief" && h(DesignBrief, { key: "b", theme: t }),
       tab === "led" && h(LedCalculator, { key: "l", theme: t }),
-      tab === "dashboard" && h(ProjectDashboard, { key: "d", theme: t }),
+      tab === "dashboard" && h(ProjectDashboard, { key: "d", theme: t, onOpenQuote: openQuoteInCalculator }),
       tab === "db" && h(DatabaseManager, { key: "db", theme: t, presets, onPresetsChange: changePresets, presetLabel, onPresetLabelChange: changePresetLabel, vendors, onAddVendor: addVendor, onRemoveVendor: removeVendor, loadVendorPresets, saveVendorPresets }),
     ]),
     // 회사정보 모달
