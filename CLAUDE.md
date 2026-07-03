@@ -73,6 +73,22 @@ Because `storage.set` in different components doesn't share React state, cross-c
 - Release 빌드는 사용자가 요청할 때만 수행한다.
 - 큰 구조 변경이나 데이터 삭제 가능성이 있는 작업은 사용자 승인을 받은 후 진행한다.
 
+## Standing Decisions
+
+이 규칙들은 사용자가 명시적으로 변경하기 전까지 영구적인 프로젝트 결정으로 취급한다.
+
+1. 이전 스프린트나 대화에서 이미 결정된 사항은 구현 질문을 다시 묻지 않고 그 결정을 그대로 따른다.
+2. 명시적으로 다른 지시가 없는 한 항상 하위 호환성을 유지한다.
+3. Feature Pack 단위로 작업한다 — 서로 밀접하게 관련된 작업을 여러 구현으로 나누지 않는다.
+4. QA는 한 단계로, Commit은 한 개로, Push는 한 번으로 묶는다.
+5. 죽은 설정(dead settings)을 도입하지 않는다 — 화면에 보이는 모든 옵션은 실제 효과가 있어야 한다.
+6. 아키텍처를 따른다: `Renderer → IPC → Service → Repository → Provider → Storage`. 이 계층을 우회하지 않는다.
+7. 임시방편보다 릴리스 준비가 된(Release-ready) 구현을 선호한다.
+8. 합리적인 구현 선택지가 여럿일 때는, 비즈니스 요구사항에 영향을 주지 않는 한 다시 묻지 않고 유지보수성 향상·확장성 향상·기술부채 감소·향후 Cloud/NAS 호환성 보존에 가장 유리한 방식을 선택한다.
+9. 명시적으로 다른 지시가 없는 한 기존에 확립된 프로젝트 관례를 계속 따른다.
+10. 작업이 기존 Feature Pack에 속한다면, 관련 없는 새 작업을 시작하기 전에 그 팩을 먼저 완료한다.
+11. 사용자에게 보이는 결과가 동일한 여러 구현 방식이 있다면, 작업이 조금 더 들더라도 항상 더 깔끔한 아키텍처가 되는 방식을 선택한다.
+
 ## Release Sprint Mode (현재 활성 모드 — 목표: 30일 내 프로덕션 품질 출시)
 
 - **Feature Pack 단위로 작업한다** (예: Settings Pack, Estimate Pack, Project Pack, UI Polish Pack, Performance Pack) — 서로 밀접하게 관련된 작업을 여러 번에 나눠 구현하지 않는다. 하나의 팩을 완전히 끝낸 후 다음으로 넘어간다.
