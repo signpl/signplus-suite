@@ -2,13 +2,24 @@ const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const ExcelJS = require("exceljs");
-const Database = require("better-sqlite3");
-const { createLicenseService } = require("./license-service.js");
+const { createLicenseService } = require("./services/licenseService.js");
+const { createSqliteProvider } = require("./providers/sqliteProvider.js");
+const { createKvRepository } = require("./repositories/kvRepository.js");
+
+/* ------------------------------------------------------------------ */
+/*  Cloud-Ready 계층 배선(Phase 1) — main.js는 IPC 배선만 담당하고, 실제      */
+/*  저장소 접속(Provider)과 데이터 조작(Repository)은 각자의 모듈에 위임한다.  */
+/*  지금은 SqliteProvider만 활성화되어 있으며, 동작(SQL·WAL·마이그레이션      */
+/*  조건)은 이전과 완전히 동일하다 — 자세한 내용은 docs/01_ARCHITECTURE.md.   */
+/* ------------------------------------------------------------------ */
+const storageProvider = createSqliteProvider({ app });
+const kvRepository = createKvRepository(storageProvider);
+const getStorageDir = storageProvider.getStorageDir;
 
 /* ------------------------------------------------------------------ */
 /*  라이선스(시리얼) 인증 — 일반(30일 만료) / 관리자(무제한)                  */
-/*  검증/저장 로직은 LicenseService(license-service.js)에 모두 위임하고,     */
-/*  여기서는 IPC 채널 배선만 담당한다 (UI ↔ 서비스 분리).                   */
+/*  검증/저장 로직은 LicenseService(services/licenseService.js)에 모두       */
+/*  위임하고, 여기서는 IPC 채널 배선만 담당한다 (UI ↔ 서비스 분리).           */
 /* ------------------------------------------------------------------ */
 const licenseService = createLicenseService({ getStorageDir });
 
@@ -45,55 +56,13 @@ ipcMain.handle("get-storage-dir", async () => {
 });
 
 /* ------------------------------------------------------------------ */
-/*  로컬 저장소 — SQLite(key-value) 기반. 이전 버전의 키별 JSON 파일이         */
-/*  남아있으면 최초 실행 시 kv 테이블로 1회 이전한다.                          */
+/*  로컬 저장소 — kvRepository(SqliteProvider 기반)에 위임. 이전 버전의 키별   */
+/*  JSON 파일이 남아있으면 최초 실행 시 kv 테이블로 1회 이전하는 동작도        */
+/*  SqliteProvider 안에 그대로 남아있다(동작 변경 없음).                     */
 /* ------------------------------------------------------------------ */
-function getStorageDir() {
-  const dir = path.join(app.getPath("userData"), "signplus-suite-data");
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return dir;
-}
+ipcMain.handle("storage-get", async (_e, key) => kvRepository.get(key));
 
-let _db = null;
-function getDb() {
-  if (_db) return _db;
-  const dir = getStorageDir();
-  _db = new Database(path.join(dir, "signplus.db"));
-  _db.pragma("journal_mode = WAL");
-  _db.exec("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
-  migrateLegacyJsonFiles(_db, dir);
-  return _db;
-}
-
-function migrateLegacyJsonFiles(db, dir) {
-  const { c } = db.prepare("SELECT COUNT(*) AS c FROM kv").get();
-  if (c > 0) return;
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "license.json");
-  if (!files.length) return;
-  const insert = db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)");
-  const tx = db.transaction((entries) => {
-    for (const [key, value] of entries) insert.run(key, value);
-  });
-  tx(files.map((f) => [f.slice(0, -5), fs.readFileSync(path.join(dir, f), "utf-8")]));
-}
-
-ipcMain.handle("storage-get", async (_e, key) => {
-  try {
-    const row = getDb().prepare("SELECT value FROM kv WHERE key = ?").get(String(key));
-    return row ? row.value : null;
-  } catch {
-    return null;
-  }
-});
-
-ipcMain.handle("storage-set", async (_e, key, value) => {
-  try {
-    getDb().prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(key), value);
-    return true;
-  } catch {
-    return false;
-  }
-});
+ipcMain.handle("storage-set", async (_e, key, value) => kvRepository.set(key, value));
 
 /* ------------------------------------------------------------------ */
 /*  데이터 백업 / 복구 — 저장된 모든 자료(견적·시안의뢰서·거래처·단가·설정)를    */
@@ -101,7 +70,7 @@ ipcMain.handle("storage-set", async (_e, key, value) => {
 /* ------------------------------------------------------------------ */
 ipcMain.handle("backup-export", async () => {
   try {
-    const rows = getDb().prepare("SELECT key, value FROM kv").all();
+    const rows = kvRepository.getAll();
     const data = {};
     for (const row of rows) data[row.key] = row.value;
     const payload = { app: "signplus-suite", exportedAt: new Date().toISOString(), data };
@@ -130,13 +99,8 @@ ipcMain.handle("backup-import", async () => {
     const raw = fs.readFileSync(filePaths[0], "utf-8");
     const payload = JSON.parse(raw);
     if (!payload || typeof payload.data !== "object") return { ok: false, error: "올바른 백업 파일이 아닙니다." };
-    const db = getDb();
-    const insert = db.prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
     const entries = Object.entries(payload.data);
-    const tx = db.transaction((items) => {
-      for (const [key, value] of items) insert.run(key, value);
-    });
-    tx(entries);
+    kvRepository.setMany(entries);
     return { ok: true, count: entries.length, exportedAt: payload.exportedAt };
   } catch (err) {
     console.error("[backup-import] 오류:", err);

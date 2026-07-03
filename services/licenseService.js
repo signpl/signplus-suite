@@ -11,7 +11,7 @@
 /* ==================================================================== */
 const fs = require("fs");
 const path = require("path");
-const { checkSerial, generateSerial, generateAdminSerial, generateBetaSerial, BETA_VALID_DAYS } = require("./license-common.js");
+const { checkSerial, generateSerial, generateAdminSerial, generateBetaSerial, BETA_VALID_DAYS } = require("../license-common.js");
 
 /* ------------------------------------------------------------------ */
 /*  베타 단계의 라이선스 티어(Trial/Pro) — license-common.js의 시리얼      */
