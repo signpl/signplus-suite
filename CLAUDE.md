@@ -106,6 +106,22 @@ Because `storage.set` in different components doesn't share React state, cross-c
   - Commit Hash
 - **Release는 명시적으로 요청받았을 때만 빌드한다** (기존 Safety Rules와 동일).
 
+## Build & Release Pipeline
+
+Release 빌드(`npm run dist`)가 요청되면, 중단하기 전에 아래 파이프라인을 항상 자동으로 전부 수행한다:
+
+1. Signplus Suite/Electron/`win-unpacked` 등 빌드를 잠그고 있을 만한 프로세스를 모두 탐지한다.
+2. 잠금의 원인이 되는 프로세스만 자동으로 종료한다.
+3. `app.asar`(또는 잠긴 대상 파일)이 더 이상 잠겨있지 않은지 확인한다.
+4. 필요한 경우에만 오래된 빌드 산출물(`dist/win-unpacked`, 임시 빌드 폴더)을 정리한다 — 사용자 데이터나 프로젝트 파일은 절대 삭제하지 않는다.
+5. 빌드를 자동으로 재시도한다.
+6. 그래도 실패하면 진단 정보를 수집하고 재시도는 한 번만 더 한다.
+7. 자동 복구가 문제를 해결하지 못했을 때만 중단하고 사용자에게 보고한다.
+
+- 중간 진단 단계마다 멈추지 않는다 — 승인은 Windows가 프로세스 종료나 파일 삭제에 권한을 요구할 때만 받는다. 그 외 복구 단계는 전부 자동으로 진행한다.
+- 빌드가 완료되면 자동으로 확인한다: 설치 파일 존재 여부, 설치 파일 크기, 빌드 소요 시간, 빌드 버전, `app.asar` 안에 `services/`·`repositories`·`providers/` 모듈이 정상 포함됐는지.
+- 최종 보고는 아래 형식만 사용한다: Build Status / Version / Build Time / Installer Path / Installer Size / Recovery Actions (있었다면).
+
 ## Workflow
 
 기본 워크플로우 (별도 지시 없는 한 유지):
