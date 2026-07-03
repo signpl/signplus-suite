@@ -2040,15 +2040,25 @@ const ADMIN_MENU_ITEMS = [
 /*  라이선스(시리얼) 인증 화면                                              */
 /* ==================================================================== */
 // 시리얼 입력값 포맷팅(하이픈 자동 삽입 · prefix 감지) — 순수 UI 포맷팅 함수로, 검증 로직과 무관해 LicenseGate와 관리자 라이선스 패널이 공유한다.
+// 인식 가능한 시리얼 접두사 목록 — 새 종류가 추가되면 이 배열에 한 줄만 추가하면 된다(하드코딩된
+// 단일 포맷 없음). 길이가 긴 접두사부터 먼저 검사해야 "SPX"가 "SPXA"/"SPS-BETA" 등 더 긴 접두사보다
+// 먼저 잘못 매칭되지 않는다. license-common.js가 아직 검증하지 않는 향후 포맷(SPS-T/P/A)도 입력
+// 필드가 잘라먹지 않도록 미리 등록해둔다 — 실제 유효성 검사는 checkSerial이 그대로 담당한다.
+const SERIAL_PREFIXES = ["SPXA", "SPS-BETA", "SPS-T", "SPS-P", "SPS-A", "SPX"]
+  .sort((a, b) => b.replace(/-/g, "").length - a.replace(/-/g, "").length);
+
 function formatSerialInput(v, setPrefix) {
-  let clean = v.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  let detectedPrefix = "SPX";
-  if (clean.startsWith("SPXA")) { detectedPrefix = "SPXA"; clean = clean.slice(4); }
-  else if (clean.startsWith("SPX")) { clean = clean.slice(3); }
-  setPrefix(detectedPrefix);
-  clean = clean.slice(0, 16);
-  const parts = [clean.slice(0, 4), clean.slice(4, 8), clean.slice(8, 12), clean.slice(12, 16)].filter(Boolean);
-  return parts.join("-");
+  const raw = String(v).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  // 접두사 자체(예: "SPS-BETA")에 하이픈이 있어도 raw는 하이픈이 전부 제거된 상태이므로,
+  // 비교는 하이픈을 뺀 형태로 하되 setPrefix에는 원래(하이픈 포함) 표기를 그대로 넘긴다 —
+  // 활성화 시 `${prefix}-${serial}`로 재조합되므로 접두사 내부 하이픈 위치가 보존되어야 한다.
+  const matched = SERIAL_PREFIXES.find((p) => raw.startsWith(p.replace(/-/g, "")));
+  setPrefix(matched || "SPX");
+  // 접두사를 인식했으면 그 뒤만, 아직 못 찾았으면(입력 중) 전체를 그대로 4자리씩 묶는다 —
+  // 어느 경우든 길이를 16자로 자르지 않으므로 그룹 수가 3개든 4개든 문자가 사라지지 않는다.
+  const body = matched ? raw.slice(matched.replace(/-/g, "").length) : raw;
+  const groups = body.match(/.{1,4}/g) || [];
+  return groups.join("-");
 }
 
 function LicenseGate(props) {
