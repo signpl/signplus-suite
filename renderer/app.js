@@ -539,7 +539,7 @@ function QuoteCalculator(props) {
   const [savedSearch, setSavedSearch] = useState("");
   const [marginRate, setMarginRate] = useState(0); // 0~1000 (%)
   const [pdfTheme, setPdfTheme] = useState("classic");
-  const [quoteStatus, setQuoteStatus] = useState("작성중"); // 작성중 / 발주 / 진행중 / 완료
+  const [quoteStatus, setQuoteStatus] = useState("상담중"); // 견적/프로젝트/KPI 공용 상태(STATUSES) 사용 — 상담중/견적발송/계약/시공중/완료
   const [editingId, setEditingId] = useState(null);
   const [selectedVendor, setSelectedVendor] = useState("jeil"); // 거래처 ID
   const [vendorPresets, setVendorPresets] = useState([]); // 현재 선택 거래처 단가
@@ -603,7 +603,7 @@ function QuoteCalculator(props) {
     setClient(r.client || { name: r.clientName || "", manager: "", tel: "" });
     setProjectName(r.projectName); setQuoteNo(r.quoteNo || genQuoteNo(saved)); setQuoteDate(r.quoteDate || todayISO());
     setValidity(r.validity || ""); setNote(r.note || ""); setItems(r.items); setMarginRate(Number(r.marginRate) || 0);
-    setQuoteStatus(r.status || "작성중"); setSelectedVendor(r.vendorId || "jeil"); setLinkedProjectId(r.projectId || ""); setEditingId(r.id); flash("불러왔습니다");
+    setQuoteStatus(normalizeStatus(r.status)); setSelectedVendor(r.vendorId || "jeil"); setLinkedProjectId(r.projectId || ""); setEditingId(r.id); flash("불러왔습니다");
   };
   const handleDelete = async (id) => { const next = saved.filter((r) => r.id !== id); await saveKey("sp2-quotes", next); setSaved(next); if (editingId === id) setEditingId(null); };
 
@@ -737,7 +737,7 @@ function QuoteCalculator(props) {
             Field(t, "프로젝트명", TextInput(t, { value: projectName, onChange: (e) => setProjectName(e.target.value), placeholder: "춘천점 채널간판" })),
             Field(t, "견적일자", TextInput(t, { type: "date", value: quoteDate, onChange: (e) => setQuoteDate(e.target.value) })),
             Field(t, "유효기간", TextInput(t, { value: validity, onChange: (e) => setValidity(e.target.value) })),
-            Field(t, "상태", Sel(t, { value: quoteStatus, onChange: (e) => setQuoteStatus(e.target.value), style: { fontWeight: DS.font.weight.bold, color: quoteStatus === "완료" ? t.green : quoteStatus === "진행중" ? t.accent : quoteStatus === "발주" ? t.blue : t.muted } }, [{ value: "작성중", label: "📝 작성중" }, { value: "발주", label: "📋 발주" }, { value: "진행중", label: "🔨 진행중" }, { value: "완료", label: "✅ 완료" }])),
+            Field(t, "상태", Sel(t, { value: quoteStatus, onChange: (e) => setQuoteStatus(e.target.value), style: { fontWeight: DS.font.weight.bold, color: t[STATUS_COLOR_KEY[quoteStatus]] || t.muted } }, [{ value: "상담중", label: "📝 상담중" }, { value: "견적발송", label: "📋 견적발송" }, { value: "계약", label: "🤝 계약" }, { value: "시공중", label: "🔨 시공중" }, { value: "완료", label: "✅ 완료" }])),
             Field(t, "연결 프로젝트", Sel(t, { value: linkedProjectId, onChange: (e) => setLinkedProjectId(e.target.value) }, [{ value: "", label: "선택 안함" }, ...projectsForLink.map((p) => ({ value: p.id, label: `${p.client ? p.client + " · " : ""}${p.name || "(제목 없음)"}` }))])),
           ]),
         ]),
@@ -898,10 +898,11 @@ function QuoteCalculator(props) {
         h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: DS.spacing.md, maxHeight: 300, overflowY: "auto" } }, list.length === 0
           ? [h("div", { key: "e", style: { color: t.muted, fontSize: DS.font.size.base, padding: `${DS.spacing.xl}px 0`, textAlign: "center" } }, "검색 결과가 없습니다.")]
           : list.map((r) => {
-            const statusColor = { "작성중": t.muted, "발주": t.blue, "진행중": t.accent, "완료": t.green };
+            const rStatus = normalizeStatus(r.status); // 구버전 상태(작성중/발주/진행중)도 공용 상태로 표시
+            const rColor = t[STATUS_COLOR_KEY[rStatus]] || t.muted;
             return h("div", { key: r.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, background: editingId === r.id ? t.accentSoft : t.surface2, borderRadius: DS.radius.md, border: editingId === r.id ? `1px solid ${t.accent}` : "1px solid transparent" } }, [
             h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: DS.spacing.lg } }, [
-              h("span", { key: 0, style: { display: "inline-block", padding: `2px ${DS.spacing.md}px`, borderRadius: DS.radius.sm, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.bold, background: (statusColor[r.status] || t.muted) + "22", color: statusColor[r.status] || t.muted } }, r.status || "작성중"),
+              h("span", { key: 0, style: { display: "inline-block", padding: `2px ${DS.spacing.md}px`, borderRadius: DS.radius.sm, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.bold, background: rColor + "22", color: rColor } }, rStatus),
               h("div", { key: 1 }, [
                 h("div", { key: 1, style: { fontWeight: DS.font.weight.semibold, color: t.ink, fontSize: DS.font.size.base } }, `${r.quoteNo ? r.quoteNo + " · " : ""}${r.projectName || (r.client && r.client.name) || r.clientName || "(제목 없음)"}`),
                 h("div", { key: 2, style: { color: t.muted, fontSize: DS.font.size.sm } }, `${(r.client && r.client.name) || r.clientName || "-"} · ${(r.savedAt || "").slice(0, 10)} · 원가 ${won(r.baseSubtotal || 0)} · 판매 ${won(r.subtotal || r.total || 0)}${r.marginRate ? " · 마진" + r.marginRate + "%" : ""}`),
@@ -1523,18 +1524,24 @@ function DatabaseManager(props) {
 /* ==================================================================== */
 /*  4. 프로젝트 대시보드 + 매출 통계/차트                                   */
 /* ==================================================================== */
+// 견적(Quote)·프로젝트(Project)·대시보드 KPI가 공유하는 단일 상태 정의(Single Source of Truth).
+// 상태를 추가/변경할 때는 이 배열만 수정하면 된다 — 견적/프로젝트/집계 어디에도 별도의 상태 목록을 두지 않는다.
 const STATUSES = ["상담중", "견적발송", "계약", "시공중", "완료"];
 
-// 견적 상태(작성중/발주/진행중/완료) → 프로젝트 칸반 상태 매핑.
-// 견적의 status가 프로젝트/상단 진행현황 모두가 참조하는 단일 기준값(SQLite sp2-quotes)이며,
-// 이 매핑 하나로 양쪽 표시를 항상 일치시킨다 (별도 상태 필드를 새로 두지 않는다).
-const mapQuoteStatus = (s) => {
+// 상태별 의미 색상(테마 토큰 키) — STATUSES와 마찬가지로 견적 화면과 프로젝트 대시보드가 공유한다.
+const STATUS_COLOR_KEY = { 상담중: "muted", 견적발송: "blue", 계약: "accent", 시공중: "purple", 완료: "green" };
+
+// 상태값 정규화 — 이미 공용 상태(STATUSES)면 그대로 반환하고, 구버전 견적 상태(작성중/발주/진행중)만
+// 아래 규칙으로 변환한다. 기존 저장 데이터는 건드리지 않고(별도 마이그레이션 없음), 읽을 때마다 이 함수
+// 하나만 거쳐 항상 최신 5단계 상태로 표시·집계되도록 한다. 견적/프로젝트/KPI 전부 이 함수만 사용한다.
+//   작성중 → 상담중, 발주 → 견적발송, 진행중 → 시공중, 완료 → 완료
+const normalizeStatus = (s) => {
   if (!s) return "상담중";
   const st = String(s).trim();
+  if (STATUSES.includes(st)) return st; // 이미 공용 상태값
   if (st === "작성중" || /draft/i.test(st)) return "상담중";
-  if (st === "발주" || st === "견적발송") return "견적발송";
-  if (st === "계약") return "계약";
-  if (st === "진행중" || st === "시공중") return "시공중";
+  if (st === "발주") return "견적발송";
+  if (st === "진행중") return "시공중";
   if (st === "완료") return "완료";
   return "상담중";
 };
@@ -1544,7 +1551,7 @@ const mapQuoteStatus = (s) => {
 // 연결된 프로젝트가 없으면 아무 일도 하지 않음 — 견적과 연결되지 않은 프로젝트의 기존 상태 관리(칸반 이동 버튼)는 그대로 유지된다.
 async function syncLinkedProjectStatus(quote) {
   if (!quote || !quote.id) return;
-  const mapped = mapQuoteStatus(quote.status);
+  const mapped = normalizeStatus(quote.status);
   const projects = await loadKey("sp2-projects", []);
   let changed = false;
   const next = projects.map((p) => {
@@ -1576,7 +1583,7 @@ function quotesForProject(project, allQuotes) {
 // 연결되지 않은 프로젝트에서만 의미가 있으므로, 그 경우에만 저장된 project.status를 사용한다.
 function effectiveProjectStatus(project, allQuotes) {
   const linked = quotesForProject(project, allQuotes);
-  if (linked.length) return mapQuoteStatus(linked[0].status);
+  if (linked.length) return normalizeStatus(linked[0].status);
   return project.status || "상담중";
 }
 
@@ -1658,6 +1665,20 @@ function ProjectDashboard(props) {
     setQuotes(next);
   };
 
+  // 프로젝트 상세의 상태 드롭다운에서 호출 — 견적이 연결된 프로젝트는 그 견적의 status를 바로 갱신해
+  // 견적/KPI가 즉시 같은 값을 공유하도록 하고(프로젝트 상태는 항상 견적을 따라감), 프로젝트 자체 status도
+  // 함께 맞춰둔다(연결이 나중에 끊겨도 마지막 상태가 남도록). 연결된 견적이 없으면 프로젝트 status만 갱신한다.
+  const changeProjectStatus = async (p, newStatus) => {
+    const linked = quotesForProject(p, quotes);
+    if (linked.length) {
+      const target = linked[0];
+      const nextQuotes = quotes.map((q) => (q.id === target.id ? { ...q, status: newStatus } : q));
+      await saveKey("sp2-quotes", nextQuotes);
+      setQuotes(nextQuotes);
+    }
+    persist(projects.map((pr) => (pr.id === p.id ? { ...pr, status: newStatus, ...(newStatus === "완료" ? { completedAt: todayISO() } : {}) } : pr)));
+  };
+
   const addProject = () => {
     if (!form.client && !form.name) return;
     if (editingProjectId) {
@@ -1685,7 +1706,7 @@ function ProjectDashboard(props) {
   const remove = (id) => persist(projects.filter((p) => p.id !== id));
 
   // 견적 데이터 자동 분석 (발주/진행중/완료 상태 기준)
-  const activeQuotes = quotes.filter((q) => q && q.status && q.status !== "작성중");
+  const activeQuotes = quotes.filter((q) => q && q.status && normalizeStatus(q.status) !== "상담중");
   const nowMonth = todayISO().slice(0, 7);
   let thisMonthQuotes = 0;
   let thisMonthBase = 0;
@@ -1707,9 +1728,9 @@ function ProjectDashboard(props) {
   const totalMargin = totalSellAmount - totalBaseCost;
   const avgMarginRate = totalBaseCost > 0 ? Math.round((totalMargin / totalBaseCost) * 100) : 0;
 
-  // 견적 상태별 집계: 상담중, 견적발송, 계약, 시공중, 완료 (매핑은 모듈 상단 mapQuoteStatus 공용 함수 사용)
-  const quoteStatusCounts = { 상담중: 0, 견적발송: 0, 계약: 0, 시공중: 0, 완료: 0 };
-  (quotes || []).forEach((q) => { try { const k = mapQuoteStatus(q && q.status); quoteStatusCounts[k] = (quoteStatusCounts[k] || 0) + 1; } catch (e) { } });
+  // 견적 상태별 집계 — 상태 목록은 STATUSES에서 그대로 가져오고(중복 정의 없음), 매핑은 normalizeStatus 공용 함수 사용
+  const quoteStatusCounts = STATUSES.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
+  (quotes || []).forEach((q) => { try { const k = normalizeStatus(q && q.status); quoteStatusCounts[k] = (quoteStatusCounts[k] || 0) + 1; } catch (e) { } });
 
   // 기존 프로젝트 통계 — 상태·금액 모두 연결된 견적을 단일 기준으로 삼는다(effectiveProjectStatus/Amount)
   const contracted = projects.filter((p) => ["계약", "시공중", "완료"].includes(effectiveProjectStatus(p, quotes)));
@@ -1725,7 +1746,8 @@ function ProjectDashboard(props) {
   const monthData = months.map((m) => ({ label: m.label, value: activeQuotes.filter((q) => (q.savedAt || "").slice(0, 7) === m.key).reduce((s, q) => s + (q.subtotal || q.total || 0), 0) }));
   const monthCostData = months.map((m) => ({ label: m.label, value: activeQuotes.filter((q) => (q.savedAt || "").slice(0, 7) === m.key).reduce((s, q) => s + (q.baseSubtotal || 0), 0) }));
 
-  const STATUS_COLOR = { 상담중: t.muted, 견적발송: t.blue, 계약: t.accent, 시공중: t.purple, 완료: t.green };
+  // 색상 매핑은 모듈 상단 STATUS_COLOR_KEY(공용)에서 파생 — 상태별 색상 정의를 여기서 다시 두지 않는다.
+  const STATUS_COLOR = STATUSES.reduce((acc, s) => { acc[s] = t[STATUS_COLOR_KEY[s]] || t.muted; return acc; }, {});
   const PRIORITY_COLOR = { 높음: t.red, 보통: t.blue, 낮음: t.muted };
   const COLOR_TAG_MAP = { accent: t.accent, blue: t.blue, green: t.green, purple: t.purple, red: t.red };
   const COLOR_TAG_KEYS = ["", "accent", "blue", "green", "purple", "red"];
@@ -1929,7 +1951,7 @@ function ProjectDashboard(props) {
               ? h("div", { key: "summary", style: { position: "relative", marginTop: DS.spacing.sm, display: "flex", flexDirection: "column", gap: 2 } }, [
                   h("div", { key: 1, style: { fontSize: DS.font.size.xs, color: t.blue, display: "flex", alignItems: "center", gap: DS.spacing.xs } }, [Ico.file({ size: 11 }), `견적 ${linkedQuotes.length}건`]),
                   h("div", { key: 2, style: { fontSize: DS.font.size.base, fontFamily: MONO, fontWeight: DS.font.weight.bold, color: t.accent } }, `총금액 ${won(latestQuote.total || 0)}`),
-                  h("div", { key: 3, style: { fontSize: DS.font.size.xs, color: t.muted } }, `상태 ${latestQuote.status || "작성중"}`),
+                  h("div", { key: 3, style: { fontSize: DS.font.size.xs, color: t.muted } }, `상태 ${normalizeStatus(latestQuote.status)}`),
                 ])
               : h("div", { key: "summary", style: { position: "relative", marginTop: DS.spacing.sm } }, [
                   h("div", { key: 1, style: { fontSize: DS.font.size.base, fontFamily: MONO, fontWeight: DS.font.weight.bold, color: t.accent } }, won(p.amount)),
@@ -1942,13 +1964,19 @@ function ProjectDashboard(props) {
                   h("div", { key: 1 }, `고객: ${p.client || "-"}`),
                   latestQuote && latestQuote.client && (latestQuote.client.manager || latestQuote.client.tel) && h("div", { key: 2 }, `담당자 ${latestQuote.client.manager || "-"} · ${latestQuote.client.tel || "-"}`),
                 ]),
+                // 상태 드롭다운 — 공용 상태(STATUSES) 사용. 견적이 연결된 프로젝트는 변경 시 그 견적의
+                // status도 함께 갱신되어(changeProjectStatus) 견적/KPI가 즉시 같은 값을 공유한다.
+                h("div", { key: "status-row", style: { display: "flex", alignItems: "center", gap: DS.spacing.sm } }, [
+                  h("span", { key: 1, style: { fontSize: DS.font.size.xs, color: t.muted, whiteSpace: "nowrap" } }, "상태"),
+                  Sel(t, { value: effectiveProjectStatus(p, quotes), onChange: (e) => changeProjectStatus(p, e.target.value), style: { fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, color: t[STATUS_COLOR_KEY[effectiveProjectStatus(p, quotes)]] || t.muted } }, STATUSES),
+                ]),
                 // 견적목록 — 이 프로젝트에 연결된 모든 견적(quote.projectId 기준)
                 linkedQuotes.length > 0 && h("div", { key: "quotes", style: { display: "flex", flexDirection: "column", gap: DS.spacing.xs } },
                   linkedQuotes.map((q) => h("div", {
                     key: q.id,
                     style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: DS.spacing.xs, fontSize: DS.font.size.xs, padding: `${DS.spacing.xs}px ${DS.spacing.sm}px`, background: t.surface2, borderRadius: DS.radius.sm },
                   }, [
-                    h("span", { key: 1, style: { color: t.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, `${q.quoteNo || "-"} · ${mapQuoteStatus(q.status)} · ${won(q.total || 0)}`),
+                    h("span", { key: 1, style: { color: t.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, `${q.quoteNo || "-"} · ${normalizeStatus(q.status)} · ${won(q.total || 0)}`),
                     h("button", { key: 2, onClick: () => props.onOpenQuote && props.onOpenQuote(q.id), style: { border: "none", background: "none", cursor: "pointer", color: t.accent, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, whiteSpace: "nowrap" } }, "열기"),
                   ]))
                 ),
