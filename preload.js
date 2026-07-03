@@ -6,7 +6,14 @@ contextBridge.exposeInMainWorld("storage", {
     return raw ? { key, value: raw } : null;
   },
   set: async (key, value) => {
-    await ipcRenderer.invoke("storage-set", key, value);
+    const res = await ipcRenderer.invoke("storage-set", key, value);
+    try {
+      if (typeof window !== "undefined" && window && window.dispatchEvent) {
+        window.dispatchEvent(new CustomEvent("sp-storage-changed", { detail: { key } }));
+      }
+    } catch (e) {
+      // ignore
+    }
     return { key, value };
   },
 });

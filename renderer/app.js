@@ -1484,28 +1484,73 @@ function ProjectDashboard(props) {
   const [projects, setProjects] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [selectedQuoteId, setSelectedQuoteId] = useState("");
   const [form, setForm] = useState({ client: "", name: "", amount: "", deadline: "" });
 
   useEffect(() => {
     loadKey("sp2-projects", []).then((v) => { setProjects(v); setLoaded(true); });
     loadKey("sp2-quotes", []).then(setQuotes);
+    const onStorageChanged = async (e) => {
+      try {
+        const k = e && e.detail && e.detail.key;
+        if (!k) return;
+        if (k === "sp2-quotes") {
+          const q = await loadKey("sp2-quotes", []);
+          setQuotes(q || []);
+        }
+      } catch (err) { }
+    };
+    window.addEventListener("sp-storage-changed", onStorageChanged);
+    return () => window.removeEventListener("sp-storage-changed", onStorageChanged);
   }, []);
   const persist = async (next) => { setProjects(next); await saveKey("sp2-projects", next); };
 
-  const addProject = () => { if (!form.client && !form.name) return; persist([{ id: uid(), ...form, amount: Number(form.amount) || 0, status: "상담중", createdAt: todayISO() }, ...projects]); setForm({ client: "", name: "", amount: "", deadline: "" }); };
+  const addProject = () => {
+    if (!form.client && !form.name) return;
+    const proj = { id: uid(), ...form, amount: Number(form.amount) || 0, status: "상담중", createdAt: todayISO(), quoteId: selectedQuoteId || null };
+    persist([proj, ...projects]);
+    setForm({ client: "", name: "", amount: "", deadline: "" });
+    setSelectedQuoteId("");
+  };
   const move = (id, dir) => persist(projects.map((p) => { if (p.id !== id) return p; const idx = STATUSES.indexOf(p.status); return { ...p, status: STATUSES[Math.min(Math.max(idx + dir, 0), STATUSES.length - 1)], ...(STATUSES[Math.min(Math.max(idx + dir, 0), STATUSES.length - 1)] === "완료" ? { completedAt: todayISO() } : {}) }; }));
   const remove = (id) => persist(projects.filter((p) => p.id !== id));
 
   // 견적 데이터 자동 분석 (발주/진행중/완료 상태 기준)
-  const activeQuotes = quotes.filter((q) => q.status && q.status !== "작성중");
+  const activeQuotes = quotes.filter((q) => q && q.status && q.status !== "작성중");
   const nowMonth = todayISO().slice(0, 7);
-  const thisMonthQuotes = activeQuotes.filter((q) => (q.savedAt || "").slice(0, 7) === nowMonth);
+  let thisMonthQuotes = 0;
+  let thisMonthBase = 0;
+  let thisMonthSell = 0;
+  let thisMonthMargin = 0;
+  (quotes || []).forEach((q) => {
+    if (q && q.savedAt) {
+      const qMonth = q.savedAt.slice(0, 7);
+      if (qMonth === nowMonth) {
+        thisMonthQuotes++;
+        thisMonthBase += q.baseSubtotal || 0;
+        thisMonthSell += q.subtotal || 0;
+        thisMonthMargin += q.marginAmount || (q.subtotal - q.baseSubtotal) || 0;
+      }
+    }
+  });
   const totalBaseCost = activeQuotes.reduce((s, q) => s + (q.baseSubtotal || 0), 0);
   const totalSellAmount = activeQuotes.reduce((s, q) => s + (q.subtotal || 0), 0);
   const totalMargin = totalSellAmount - totalBaseCost;
-  const avgMarginRate = totalSellAmount > 0 ? Math.round((totalMargin / totalBaseCost) * 100) : 0;
-  const thisMonthBase = thisMonthQuotes.reduce((s, q) => s + (q.baseSubtotal || 0), 0);
-  const thisMonthSell = thisMonthQuotes.reduce((s, q) => s + (q.subtotal || 0), 0);
+  const avgMarginRate = totalBaseCost > 0 ? Math.round((totalMargin / totalBaseCost) * 100) : 0;
+
+  // 견적 상태별 집계: 상담중, 견적발송, 계약, 시공중, 완료
+  const quoteStatusCounts = { 상담중: 0, 견적발송: 0, 계약: 0, 시공중: 0, 완료: 0 };
+  const mapQuoteStatus = (s) => {
+    if (!s) return "상담중";
+    const st = String(s).trim();
+    if (st === "작성중" || /draft/i.test(st)) return "상담중";
+    if (st === "발주" || st === "견적발송") return "견적발송";
+    if (st === "계약") return "계약";
+    if (st === "진행중" || st === "시공중") return "시공중";
+    if (st === "완료") return "완료";
+    return "상담중";
+  };
+  (quotes || []).forEach((q) => { try { const k = mapQuoteStatus(q && q.status); quoteStatusCounts[k] = (quoteStatusCounts[k] || 0) + 1; } catch (e) { } });
 
   // 기존 프로젝트 통계
   const contracted = projects.filter((p) => ["계약", "시공중", "완료"].includes(p.status));
@@ -1521,6 +1566,20 @@ function ProjectDashboard(props) {
   const monthData = months.map((m) => ({ label: m.label, value: activeQuotes.filter((q) => (q.savedAt || "").slice(0, 7) === m.key).reduce((s, q) => s + (q.subtotal || q.total || 0), 0) }));
   const monthCostData = months.map((m) => ({ label: m.label, value: activeQuotes.filter((q) => (q.savedAt || "").slice(0, 7) === m.key).reduce((s, q) => s + (q.baseSubtotal || 0), 0) }));
 
+  // Log quotes and status counts for debugging (no UI changes)
+  useEffect(() => {
+    try {
+      const qList = quotes || [];
+      console.log('sp2-quotes total:', qList.length);
+      const counts = {};
+      (qList || []).forEach((qq) => {
+        const st = (qq && qq.status) ? qq.status : '상담중';
+        counts[st] = (counts[st] || 0) + 1;
+      });
+      STATUSES.forEach((s) => console.log(s + ' ' + (counts[s] || 0)));
+    } catch (e) { console.error('quote log error', e); }
+  }, [quotes]);
+
   const STATUS_COLOR = { 상담중: t.muted, 견적발송: t.blue, 계약: t.accent, 시공중: t.purple, 완료: t.green };
   const KPI = (label, value, color) => Card(t, { key: label, style: { padding: 16 } }, [
     h("div", { key: 1, style: { fontSize: 12, color: t.muted, fontWeight: 600 } }, label),
@@ -1529,6 +1588,16 @@ function ProjectDashboard(props) {
 
   return h("div", { style: { display: "flex", flexDirection: "column", gap: 16 } }, [
     SectionTitle(t, "프로젝트 대시보드", "견적 데이터와 프로젝트 파이프라인이 자동으로 연동됩니다."),
+    h("div", { key: "debug", style: { whiteSpace: "pre-line", fontSize: 13, color: t.muted, marginTop: 4 } }, [
+      h("div", { key: "dbg-title", style: { fontWeight: 700, color: t.ink } }, "DEBUG"),
+      h("div", { key: "dbg-total" }, `quotes: ${ (quotes || []).length }`),
+      h("div", { key: "dbg-1" }, `상담중: ${ quoteStatusCounts['상담중'] || 0 }`),
+      h("div", { key: "dbg-2" }, `견적발송: ${ quoteStatusCounts['견적발송'] || 0 }`),
+      h("div", { key: "dbg-3" }, `계약: ${ quoteStatusCounts['계약'] || 0 }`),
+      h("div", { key: "dbg-4" }, `시공중: ${ quoteStatusCounts['시공중'] || 0 }`),
+      h("div", { key: "dbg-5" }, `완료: ${ quoteStatusCounts['완료'] || 0 }`),
+      h("div", { key: "dbg-json", style: { marginTop: 12, whiteSpace: "pre-wrap", fontFamily: MONO, fontSize: 11, color: t.accent } }, quotes && quotes[0] ? JSON.stringify(quotes[0], null, 2) : "No quotes"),
+    ]),
     // 견적 기반 원가/마진 요약
     activeQuotes.length > 0 && h("div", { key: "q-kpi", style: { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 } }, [
       KPI("발주·진행 건수", activeQuotes.length + "건"),
@@ -1539,10 +1608,10 @@ function ProjectDashboard(props) {
     ]),
     // 이번 달 요약
     h("div", { key: "month-kpi", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 } }, [
-      KPI("이번 달 견적", thisMonthQuotes.length + "건"),
+      KPI("이번 달 견적", thisMonthQuotes + "건"),
       KPI("이번 달 원가", won(thisMonthBase)),
       KPI("이번 달 판매", won(thisMonthSell), t.blue),
-      KPI("이번 달 마진", won(thisMonthSell - thisMonthBase), (thisMonthSell - thisMonthBase) > 0 ? t.green : t.red),
+      KPI("이번 달 마진", won(thisMonthMargin), thisMonthMargin > 0 ? t.green : t.red),
     ]),
     // 기존 파이프라인 KPI
     h("div", { key: "kpi", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 } }, [
