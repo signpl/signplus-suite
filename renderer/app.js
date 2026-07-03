@@ -2099,12 +2099,14 @@ function LicenseGate(props) {
       ]),
       h("input", {
         key: 4, value: serial, onChange: (e) => setSerial(formatSerial(e.target.value)),
-        placeholder: "SPX-XXXX-XXXX-XXXX-XXXX",
-        onKeyDown: (e) => { if (e.key === "Enter" && serial.length >= 16) activate(); },
+        placeholder: "SPX-XXXX-XXXX-XXXX-XXXX / SPS-BETA-XXXX-XXXX-XXXX",
+        // 시리얼 종류마다 바디 길이가 다르므로(예: 베타는 3그룹) 특정 자릿수를 기준으로 잠그지 않는다 —
+        // 실제 형식·체크섬 검증은 항상 activate()가 호출하는 checkSerial이 담당한다.
+        onKeyDown: (e) => { if (e.key === "Enter" && serial.replace(/-/g, "").length > 0) activate(); },
         style: { width: "100%", padding: `${DS.spacing.lg}px ${DS.spacing.md + DS.spacing.sm}px`, borderRadius: DS.radius.md, border: `1px solid ${error ? t.red : t.divider}`, fontFamily: MONO, fontSize: DS.font.size.lg, letterSpacing: 1, textAlign: "center", outline: "none", boxSizing: "border-box", background: t.bg, color: t.ink, marginBottom: DS.spacing.md + DS.spacing.sm },
       }),
       error && h("div", { key: 5, style: { fontSize: DS.font.size.sm, color: t.red, marginBottom: DS.spacing.md + DS.spacing.sm, fontWeight: DS.font.weight.semibold } }, error),
-      Btn(t, { key: 6, variant: "accent", onClick: activate, disabled: checking || serial.replace(/-/g, "").length < 16, style: { width: "100%", justifyContent: "center", padding: `${DS.spacing.lg}px 0`, fontSize: DS.font.size.md } }, checking ? "확인 중..." : "인증하기"),
+      Btn(t, { key: 6, variant: "accent", onClick: activate, disabled: checking || serial.replace(/-/g, "").length === 0, style: { width: "100%", justifyContent: "center", padding: `${DS.spacing.lg}px 0`, fontSize: DS.font.size.md } }, checking ? "확인 중..." : "인증하기"),
       h("div", { key: 7, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xxl, lineHeight: 1.6 } }, "일반 시리얼은 발급일로부터 30일간 사용 가능합니다.\n기간 만료 시 새 시리얼을 발급받아 다시 입력해주세요.\n문의사항은 공급처에 연락해주세요."),
     ])
   );
@@ -2216,9 +2218,11 @@ function AdminLicensePanel(props) {
           h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.lg } }, "관리자 라이선스"),
           Field(t, "라이선스 키 입력", TextInput(t, {
             value: serial, onChange: (e) => setSerial(formatSerialInput(e.target.value, setPrefix)),
-            placeholder: "SPX-XXXX-XXXX-XXXX-XXXX", style: { fontFamily: MONO, letterSpacing: 1 },
+            placeholder: "SPX-XXXX-XXXX-XXXX-XXXX / SPS-BETA-XXXX-XXXX-XXXX", style: { fontFamily: MONO, letterSpacing: 1 },
           })),
-          Btn(t, { variant: "accent", onClick: apply, disabled: checking || serial.replace(/-/g, "").length < 16, style: { width: "100%", justifyContent: "center", marginTop: DS.spacing.md, marginBottom: DS.spacing.lg } }, checking ? "확인 중..." : "라이선스 적용"),
+          // 시리얼 종류마다 바디 길이가 다르므로(예: 베타는 3그룹) 특정 자릿수를 기준으로 잠그지 않는다 —
+          // 실제 형식·체크섬 검증은 항상 apply()가 호출하는 checkSerial이 담당한다.
+          Btn(t, { variant: "accent", onClick: apply, disabled: checking || serial.replace(/-/g, "").length === 0, style: { width: "100%", justifyContent: "center", marginTop: DS.spacing.md, marginBottom: DS.spacing.lg } }, checking ? "확인 중..." : "라이선스 적용"),
           h("div", { key: "div1", style: { borderTop: `1px solid ${t.divider}`, margin: `${DS.spacing.lg}px 0` } }),
           h("div", { key: "type", style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.sm, padding: `${DS.spacing.xs}px 0`, color: t.muted } }, [h("span", {}, "라이선스 종류"), h("span", { style: { color: t.accent, fontWeight: DS.font.weight.semibold } }, "Pro Version (무제한)")]),
           h("div", { key: "status", style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.sm, padding: `${DS.spacing.xs}px 0`, color: t.muted } }, [h("span", {}, "상태"), h("span", { style: { color: isAdmin ? t.accent : t.muted, fontWeight: DS.font.weight.semibold } }, isAdmin ? "활성" : "비활성")]),
