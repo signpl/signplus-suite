@@ -1522,7 +1522,7 @@ function ProjectDashboard(props) {
   let thisMonthBase = 0;
   let thisMonthSell = 0;
   let thisMonthMargin = 0;
-  (quotes || []).forEach((q) => {
+  activeQuotes.forEach((q) => {
     if (q && q.savedAt) {
       const qMonth = q.savedAt.slice(0, 7);
       if (qMonth === nowMonth) {
