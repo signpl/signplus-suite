@@ -2118,14 +2118,28 @@ function LicenseProgressBar(t, pct, color, label) {
 // 라이선스 상태를 화면에 표시하기 위한 파생값 계산 — UI(JSX)와 분리된 순수 함수.
 // 검증/만료 판정 자체는 메인 프로세스의 LicenseService(license-service.js)가 전담하고,
 // 여기서는 그 결과(license 객체)를 라벨/색상/진행률로 가공만 한다.
+// license 객체(activated/type/tier)로부터 표시용 티어(pro/trial)를 얻는 공용 함수 — license-service.js가
+// 채워주는 tier 필드를 우선 쓰고, tier가 없는(구버전) 응답은 기존 type(admin/customer)으로 안전하게
+// 유추한다. App() 사이드바 배지와 deriveLicenseDisplay가 모두 이 함수 하나만 사용한다(중복 정의 없음).
+function licenseTier(license) {
+  if (!license) return null;
+  return license.tier || (license.type === "admin" ? "pro" : license.type === "customer" ? "trial" : null);
+}
+
+// 베타 단계 라이선스 티어(Trial/Pro) — license.tier는 license-service.js가 채워주는 표시용 필드
+// (기존 type: admin/customer, 시리얼 형식·검증 로직은 그대로). tier가 없는(구버전) 응답을 받아도
+// type으로 안전하게 유추해 항상 동작하도록 폴백을 둔다.
 function deriveLicenseDisplay(license, t) {
   const CUSTOMER_VALID_DAYS = 30; // license-common.js VALID_DAYS와 동일(표시 전용 상수 — 검증 로직은 여기서 다루지 않음)
-  const isAdmin = license.activated && license.type === "admin";
-  const statusLabel = !license.activated ? "비활성" : (isAdmin ? "활성 (무제한)" : (license.daysLeft <= 0 ? "만료" : "활성"));
-  const statusColor = !license.activated ? t.muted : (isAdmin ? t.accent : (license.daysLeft <= 7 ? t.red : t.green));
-  const typeLabel = isAdmin ? "관리자 (무제한)" : (license.activated ? "일반" : "-");
-  const progressPct = isAdmin ? 100 : (typeof license.daysLeft === "number" ? Math.max(0, Math.min(100, (license.daysLeft / CUSTOMER_VALID_DAYS) * 100)) : 0);
-  return { isAdmin, statusLabel, statusColor, typeLabel, progressPct, CUSTOMER_VALID_DAYS };
+  const tier = licenseTier(license);
+  const isPro = license.activated && tier === "pro";
+  const isAdmin = isPro; // 하위 호환: 기존 코드가 참조하는 이름 그대로 유지(의미상 Pro와 동일)
+  const statusLabel = !license.activated ? "비활성" : (isPro ? "활성 (무제한)" : (license.daysLeft <= 0 ? "만료" : "활성"));
+  const statusColor = !license.activated ? t.muted : (isPro ? t.accent : (license.daysLeft <= 7 ? t.red : t.green));
+  const tierLabel = !license.activated ? "-" : (isPro ? "Pro Version" : "Trial Version");
+  const typeLabel = isPro ? "Pro Version (무제한)" : (license.activated ? "Trial Version (30일)" : "-");
+  const progressPct = isPro ? 100 : (typeof license.daysLeft === "number" ? Math.max(0, Math.min(100, (license.daysLeft / CUSTOMER_VALID_DAYS) * 100)) : 0);
+  return { isAdmin, isPro, tier, tierLabel, statusLabel, statusColor, typeLabel, progressPct, CUSTOMER_VALID_DAYS };
 }
 
 function AdminLicensePanel(props) {
@@ -2196,7 +2210,7 @@ function AdminLicensePanel(props) {
           })),
           Btn(t, { variant: "accent", onClick: apply, disabled: checking || serial.replace(/-/g, "").length < 16, style: { width: "100%", justifyContent: "center", marginTop: DS.spacing.md, marginBottom: DS.spacing.lg } }, checking ? "확인 중..." : "라이선스 적용"),
           h("div", { key: "div1", style: { borderTop: `1px solid ${t.divider}`, margin: `${DS.spacing.lg}px 0` } }),
-          h("div", { key: "type", style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.sm, padding: `${DS.spacing.xs}px 0`, color: t.muted } }, [h("span", {}, "라이선스 종류"), h("span", { style: { color: t.accent, fontWeight: DS.font.weight.semibold } }, "관리자 (무제한)")]),
+          h("div", { key: "type", style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.sm, padding: `${DS.spacing.xs}px 0`, color: t.muted } }, [h("span", {}, "라이선스 종류"), h("span", { style: { color: t.accent, fontWeight: DS.font.weight.semibold } }, "Pro Version (무제한)")]),
           h("div", { key: "status", style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.sm, padding: `${DS.spacing.xs}px 0`, color: t.muted } }, [h("span", {}, "상태"), h("span", { style: { color: isAdmin ? t.accent : t.muted, fontWeight: DS.font.weight.semibold } }, isAdmin ? "활성" : "비활성")]),
           h("div", { key: "version", style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.sm, padding: `${DS.spacing.xs}px 0`, color: t.muted, marginBottom: DS.spacing.lg } }, [h("span", {}, "버전"), h("span", { style: { fontFamily: MONO, color: t.ink } }, `v${APP_VERSION}`)]),
           h("div", { key: "div2", style: { borderTop: `1px solid ${t.divider}`, margin: `${DS.spacing.lg}px 0` } }),
@@ -2385,12 +2399,16 @@ function App() {
         h("button", { key: 2, onClick: handleBackupImport, title: "백업 파일을 불러와 데이터를 복원합니다. (재설치·새 컴퓨터 이전 시 사용)", style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: DS.spacing.sm, padding: `${DS.spacing.md}px ${DS.spacing.sm}px`, borderRadius: DS.radius.md, border: `1px solid ${t.divider}`, cursor: "pointer", background: t.surface2, color: t.muted, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, fontFamily: FONT } }, [Ico.book({ size: 13 }), "복원"]),
       ]),
       backupMsg && h("div", { key: 5, style: { fontSize: DS.font.size.xs, color: backupMsg.includes("실패") ? t.red : t.green, marginTop: DS.spacing.sm, textAlign: "center", fontWeight: DS.font.weight.semibold } }, backupMsg),
-      license && license.activated && license.type === "customer" && typeof license.daysLeft === "number" && h("div", { key: 6, style: { marginTop: DS.spacing.md, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, background: license.daysLeft <= 7 ? t.red + "18" : t.surface2, border: `1px solid ${license.daysLeft <= 7 ? t.red + "44" : t.divider}`, textAlign: "center" } }, [
+      license && license.activated && licenseTier(license) === "trial" && typeof license.daysLeft === "number" && h("div", { key: 6, style: { marginTop: DS.spacing.md, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, background: license.daysLeft <= 7 ? t.red + "18" : t.surface2, border: `1px solid ${license.daysLeft <= 7 ? t.red + "44" : t.divider}`, textAlign: "center" } }, [
+        h("div", { key: 0, style: { fontSize: DS.font.size.xs, fontWeight: DS.font.weight.bold, color: t.muted, letterSpacing: 0.4 } }, "Trial Version"),
         h("div", { key: 1, style: { fontSize: DS.font.size.lg, fontWeight: DS.font.weight.heavy, color: license.daysLeft <= 7 ? t.red : t.accent, fontFamily: MONO } }, license.daysLeft <= 0 ? "만료됨" : `${license.daysLeft}일`),
         h("div", { key: 2, style: { fontSize: DS.font.size.xs, color: license.daysLeft <= 7 ? t.red : t.muted, marginTop: DS.spacing.xs, fontWeight: DS.font.weight.semibold } }, license.daysLeft <= 0 ? "사용기간 만료 · 갱신 필요" : `사용기간 남음${license.daysLeft <= 7 ? " · 곧 갱신 필요" : ""}`),
         license.expiresAt && h("div", { key: 3, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xs, fontFamily: MONO } }, `만료: ${String(license.expiresAt).slice(0, 10)}`),
       ]),
-      license && license.activated && license.type === "admin" && h("div", { key: 6, style: { marginTop: DS.spacing.md, padding: `${DS.spacing.sm}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, background: t.surface2, textAlign: "center", fontSize: DS.font.size.xs, color: t.muted } }, "관리자 라이선스 (무제한)"),
+      license && license.activated && licenseTier(license) === "pro" && h("div", { key: 7, style: { marginTop: DS.spacing.md, padding: `${DS.spacing.sm}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, background: t.surface2, textAlign: "center", fontSize: DS.font.size.xs, color: t.muted } }, [
+        h("div", { key: 1, style: { fontWeight: DS.font.weight.bold, color: t.accent } }, "Pro Version"),
+        h("div", { key: 2, style: { marginTop: 2 } }, "무제한 사용"),
+      ]),
     ]),
     // 콘텐츠
     h("div", { key: "main", style: { flex: 1, padding: DS.spacing.xxxl + DS.spacing.xs, overflowY: "auto" } }, [

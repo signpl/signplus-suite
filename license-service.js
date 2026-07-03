@@ -13,6 +13,18 @@ const fs = require("fs");
 const path = require("path");
 const { checkSerial, generateSerial, generateAdminSerial } = require("./license-common.js");
 
+/* ------------------------------------------------------------------ */
+/*  베타 단계의 라이선스 티어(Trial/Pro) — license-common.js의 시리얼      */
+/*  종류(admin/customer, SPXA-/SPX- 형식·검증 로직)는 전혀 건드리지 않고,   */
+/*  기존 type 값에 UI/표시용 tier 라벨만 얹는다. 새 종류가 생기면 이       */
+/*  테이블에 한 줄만 추가하면 되도록 열어둔다(추후 확장 대비).             */
+/* ------------------------------------------------------------------ */
+const TIER_BY_TYPE = { admin: "pro", customer: "trial" };
+const TIER_INFO = {
+  pro: { label: "Pro Version", unlimited: true },
+  trial: { label: "Trial Version", unlimited: false },
+};
+
 function createLicenseService({ getStorageDir }) {
   const licenseFile = () => path.join(getStorageDir(), "license.json");
 
@@ -26,12 +38,16 @@ function createLicenseService({ getStorageDir }) {
     }
   }
 
+  function tierOf(type) {
+    return TIER_BY_TYPE[type] || "trial";
+  }
+
   function getStatus() {
     const data = readLicenseFile();
     if (!data || !data.serial) return { activated: false };
     const check = checkSerial(data.serial);
-    if (!check.valid || check.expired) return { activated: false, expired: !!check.expired, type: check.type };
-    return { activated: true, serial: data.serial, type: check.type, daysLeft: check.daysLeft, expiresAt: check.expiresAt, issuedAt: check.issuedAt };
+    if (!check.valid || check.expired) return { activated: false, expired: !!check.expired, type: check.type, tier: check.type ? tierOf(check.type) : undefined };
+    return { activated: true, serial: data.serial, type: check.type, tier: tierOf(check.type), daysLeft: check.daysLeft, expiresAt: check.expiresAt, issuedAt: check.issuedAt };
   }
 
   // 온라인 활성화 서버 연동 지점(현재 미구현) — 향후 여기서 원격 검증을 시도하고,
@@ -52,7 +68,7 @@ function createLicenseService({ getStorageDir }) {
       JSON.stringify({ serial: String(serial).trim().toUpperCase(), activatedAt: new Date().toISOString(), mode: "offline" }, null, 2),
       "utf-8"
     );
-    return { ok: true, type: check.type, daysLeft: check.daysLeft };
+    return { ok: true, type: check.type, tier: tierOf(check.type), daysLeft: check.daysLeft };
   }
 
   function reset() {
@@ -65,7 +81,7 @@ function createLicenseService({ getStorageDir }) {
     }
   }
 
-  return { getStatus, activate, reset, generateSerial, generateAdminSerial };
+  return { getStatus, activate, reset, generateSerial, generateAdminSerial, tierOf, TIER_INFO };
 }
 
-module.exports = { createLicenseService };
+module.exports = { createLicenseService, TIER_BY_TYPE, TIER_INFO };

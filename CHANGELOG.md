@@ -5,6 +5,14 @@
 - USER/MASTER 구조
 - 시리얼 생성기
 
+## v3.8.5 Trial and Pro License System
+
+- 베타 테스트를 위해 라이선스를 Trial/Pro 2종으로 정리 (기존 일반=Trial, 관리자=Pro로 매핑, 시리얼 형식·검증 로직은 변경 없음)
+- `license-service.js`에 `tier`(pro/trial) 표시 필드 추가 — 기존 `type`(admin/customer)은 그대로 유지, `tier`는 추가 필드라 하위호환 영향 없음
+- Trial: 30일 사용, 남은 일수 표시, 만료 시 앱 진입 차단(`LicenseGate`) — 기존 로직 그대로
+- Pro: 무제한 사용, 만료 없음, 전체 기능 사용 가능 — 기존 관리자 로직 그대로
+- 사이드바/관리자 대시보드에 "Trial Version"/"Pro Version" 표시 추가
+
 ## v3.8.3 Unified Project Status System
 
 - 견적(Quote)·프로젝트(Project)·대시보드 KPI가 공유하는 단일 상태 정의(`STATUSES`: 상담중/견적발송/계약/시공중/완료) 도입
