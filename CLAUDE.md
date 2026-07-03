@@ -46,3 +46,109 @@ Because `storage.set` in different components doesn't share React state, cross-c
 - `LICENSE_SECRET` is hardcoded in `license-common.js`, checked into the repo.
 - Main-process file I/O is synchronous (`fs.readFileSync`/`writeFileSync`) throughout — acceptable at current scale but can block the UI thread on large data.
 - No automated tests exist for the calculation logic (quote totals, LED calculators) or IPC handlers.
+
+## Goal
+
+이 프로젝트는 간판 통합 관리 프로그램이다.
+
+## Working Rules
+
+- 필요한 파일만 읽는다.
+- 전체 프로젝트를 다시 스캔하지 않는다.
+- 사용자가 지정한 파일만 수정한다.
+- 수정 범위는 최소화한다.
+- 기존 UI/디자인은 변경하지 않는다.
+- 기존 동작을 유지한다.
+- 리팩토링은 요청받았을 때만 수행한다.
+- 새 라이브러리는 허가 없이 추가하지 않는다.
+- 새 파일은 필요한 경우에만 생성한다.
+
+## Safety Rules
+
+- 기존 기능을 절대 삭제하지 않는다.
+- 동작 중인 기능은 리팩토링보다 유지한다.
+- UI 변경 시 기존 기능이 그대로 동작해야 한다.
+- 모든 작업은 QA 후 Commit한다.
+- Commit 후 GitHub Push까지 완료한다.
+- Release 빌드는 사용자가 요청할 때만 수행한다.
+- 큰 구조 변경이나 데이터 삭제 가능성이 있는 작업은 사용자 승인을 받은 후 진행한다.
+
+## Workflow
+
+기본 워크플로우 (별도 지시 없는 한 유지):
+
+```
+1. 기능 개발
+2. QA
+3. Commit
+4. GitHub Push
+5. (필요할 때만) Release 빌드
+6. 설치 후 실사용 테스트
+```
+
+- 1~4단계는 매 작업마다 기본으로 수행한다.
+- Release(EXE 빌드, `npm run dist`, 5단계)는 자동으로 하지 않는다 — 사용자가 명시적으로 요청할 때만 실행한다.
+- Release 빌드 후에는 설치 파일을 실제로 설치해 실사용 테스트(6단계)까지 거친다.
+- 큰 구조 변경이나 데이터 삭제 가능성이 있는 작업은 이 워크플로우와 별개로 항상 먼저 사용자 승인을 받는다.
+
+## Version Policy
+
+- Sprint 완료 시 Patch 버전 증가 (예: 3.8.0 → 3.8.1)
+- 기능 추가 완료 시 Minor 버전 증가 (예: 3.8.x → 3.9.0)
+- 대규모 구조 변경 시 Major 버전 증가 (예: 3.x → 4.0.0)
+- 버전 문자열은 두 곳에 동시에 반영한다: `package.json`의 `version`, `renderer/version.js`의 `window.__APP_VERSION__`.
+
+## Bug Policy
+
+- Critical: 즉시 수정
+- Major: 현재 Sprint 종료 후 수정
+- Minor: TODO에 등록 후 다음 Sprint에서 처리
+- UX: TODO에 등록 후 우선순위에 따라 처리
+
+## TODO Policy
+
+- 새로운 기능 요청은 바로 구현하지 않는다.
+- 반드시 `TODO.md`에 등록한 후, 우선순위를 정해서 Sprint 단위로 개발한다.
+
+## Documentation Files
+
+- `README.md` — 프로젝트 소개
+- `CLAUDE.md` — 개발 규칙
+- `TODO.md` — 다음 Sprint 작업
+- `CHANGELOG.md` — 개발 변경 이력
+- `RELEASE_NOTES.md` — 사용자 업데이트 내역
+- `IDEAS.md` — 아이디어 저장소
+
+## Investigation
+
+- 먼저 필요한 함수만 조사한다.
+- 조사 후 수정 계획을 3줄 이내로 설명한다.
+- 수정 후 변경된 파일과 줄 번호만 보고한다.
+- 긴 설명은 생략한다.
+
+## Token Saving
+
+- 같은 파일을 반복해서 다시 읽지 않는다.
+- 이미 조사한 내용은 재사용한다.
+- 필요한 코드 블록만 읽는다.
+- 전체 app.js를 다시 분석하지 않는다.
+- REPORT.md, REPORT_FIX.md는 요청 시에만 읽는다.
+
+## Project
+
+주요 UI는 renderer/app.js에 있다.
+
+ProjectDashboard 수정 시 다른 컴포넌트는 건드리지 않는다.
+
+QuoteCalculator 수정 시 다른 계산기는 건드리지 않는다.
+
+DatabaseManager 수정 시 Dashboard는 건드리지 않는다.
+
+## Response
+
+보고는 아래 형식만 사용한다.
+
+- 수정 파일
+- 수정 줄 번호
+- 수정 내용
+- 테스트 결과
