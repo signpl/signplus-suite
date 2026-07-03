@@ -3,34 +3,25 @@ const path = require("path");
 const fs = require("fs");
 const ExcelJS = require("exceljs");
 const Database = require("better-sqlite3");
-const { checkSerial } = require("./license-common.js");
+const { createLicenseService } = require("./license-service.js");
 
 /* ------------------------------------------------------------------ */
 /*  라이선스(시리얼) 인증 — 일반(30일 만료) / 관리자(무제한)                  */
+/*  검증/저장 로직은 LicenseService(license-service.js)에 모두 위임하고,     */
+/*  여기서는 IPC 채널 배선만 담당한다 (UI ↔ 서비스 분리).                   */
 /* ------------------------------------------------------------------ */
-function licenseFile() {
-  return path.join(getStorageDir(), "license.json");
-}
+const licenseService = createLicenseService({ getStorageDir });
+
 ipcMain.handle("license-status", async () => {
   try {
-    const file = licenseFile();
-    if (!fs.existsSync(file)) return { activated: false };
-    const data = JSON.parse(fs.readFileSync(file, "utf-8"));
-    if (!data || !data.serial) return { activated: false };
-    const check = checkSerial(data.serial);
-    if (!check.valid || check.expired) return { activated: false, expired: !!check.expired, type: check.type };
-    return { activated: true, serial: data.serial, type: check.type, daysLeft: check.daysLeft, expiresAt: check.expiresAt, issuedAt: check.issuedAt };
+    return licenseService.getStatus();
   } catch {
     return { activated: false };
   }
 });
 ipcMain.handle("license-activate", async (_e, serial) => {
   try {
-    const check = checkSerial(serial);
-    if (!check.valid) return { ok: false, error: "유효하지 않은 시리얼 번호입니다. 형식과 오탈자를 확인해주세요." };
-    if (check.expired) return { ok: false, error: `이 시리얼은 이미 만료되었습니다 (발급일로부터 30일 경과). 새 시리얼을 발급받아 입력해주세요.` };
-    fs.writeFileSync(licenseFile(), JSON.stringify({ serial: String(serial).trim().toUpperCase(), activatedAt: new Date().toISOString() }, null, 2), "utf-8");
-    return { ok: true, type: check.type, daysLeft: check.daysLeft };
+    return await licenseService.activate(serial);
   } catch (err) {
     return { ok: false, error: String((err && err.message) || err) };
   }
@@ -38,9 +29,7 @@ ipcMain.handle("license-activate", async (_e, serial) => {
 /* 관리자 라이선스 패널의 "라이선스 초기화/로그아웃"에서 사용 — 검증 로직은 그대로, 저장된 활성화 파일만 지운다 */
 ipcMain.handle("license-reset", async () => {
   try {
-    const file = licenseFile();
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-    return { ok: true };
+    return licenseService.reset();
   } catch (err) {
     return { ok: false, error: String((err && err.message) || err) };
   }

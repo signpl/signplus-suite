@@ -2087,6 +2087,19 @@ function LicenseProgressBar(t, pct, color, label) {
   ]);
 }
 
+// 라이선스 상태를 화면에 표시하기 위한 파생값 계산 — UI(JSX)와 분리된 순수 함수.
+// 검증/만료 판정 자체는 메인 프로세스의 LicenseService(license-service.js)가 전담하고,
+// 여기서는 그 결과(license 객체)를 라벨/색상/진행률로 가공만 한다.
+function deriveLicenseDisplay(license, t) {
+  const CUSTOMER_VALID_DAYS = 30; // license-common.js VALID_DAYS와 동일(표시 전용 상수 — 검증 로직은 여기서 다루지 않음)
+  const isAdmin = license.activated && license.type === "admin";
+  const statusLabel = !license.activated ? "비활성" : (isAdmin ? "활성 (무제한)" : (license.daysLeft <= 0 ? "만료" : "활성"));
+  const statusColor = !license.activated ? t.muted : (isAdmin ? t.accent : (license.daysLeft <= 7 ? t.red : t.green));
+  const typeLabel = isAdmin ? "관리자 (무제한)" : (license.activated ? "일반" : "-");
+  const progressPct = isAdmin ? 100 : (typeof license.daysLeft === "number" ? Math.max(0, Math.min(100, (license.daysLeft / CUSTOMER_VALID_DAYS) * 100)) : 0);
+  return { isAdmin, statusLabel, statusColor, typeLabel, progressPct, CUSTOMER_VALID_DAYS };
+}
+
 function AdminLicensePanel(props) {
   const t = props.theme;
   const license = props.license || {};
@@ -2096,7 +2109,7 @@ function AdminLicensePanel(props) {
   const [msg, setMsg] = useState("");
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(""), m.includes("실패") ? 6000 : 2500); };
 
-  const isAdmin = license.activated && license.type === "admin";
+  const { isAdmin, statusLabel, statusColor, typeLabel, progressPct } = deriveLicenseDisplay(license, t);
   const fmtDate = (d) => (d ? String(d).slice(0, 10) : "-");
 
   const apply = async () => {
@@ -2135,35 +2148,29 @@ function AdminLicensePanel(props) {
     }
   };
 
-  const statusLabel = !license.activated ? "비활성" : (license.type === "admin" ? "활성 (무제한)" : (license.daysLeft <= 0 ? "만료" : "활성"));
-  const statusColor = !license.activated ? t.muted : (license.type === "admin" ? t.accent : (license.daysLeft <= 7 ? t.red : t.green));
-  const CUSTOMER_VALID_DAYS = 30; // license-common.js VALID_DAYS와 동일(표시 전용 상수 — 검증 로직은 여기서 다루지 않음)
-  const progressPct = license.type === "admin" ? 100 : (typeof license.daysLeft === "number" ? Math.max(0, Math.min(100, (license.daysLeft / CUSTOMER_VALID_DAYS) * 100)) : 0);
-
   return h("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }, onClick: props.onClose }, [
     h("div", { key: 1, onClick: (e) => e.stopPropagation(), style: { background: t.bg, borderRadius: DS.radius.lg, padding: DS.spacing.xxxl, width: 860, maxWidth: "92vw", maxHeight: "88vh", overflowY: "auto", border: `1px solid ${t.divider}` } }, [
       h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: DS.spacing.xl } }, [
         h("div", {}, [
-          h("div", { style: { fontSize: DS.font.size.xl, fontWeight: DS.font.weight.bold, color: t.ink } }, "라이선스 관리"),
+          h("div", { style: { fontSize: DS.font.size.xl, fontWeight: DS.font.weight.bold, color: t.ink } }, "관리자 대시보드"),
           h("div", { style: { fontSize: DS.font.size.sm, color: t.muted, marginTop: DS.spacing.xs } }, "현재 설치의 라이선스 상태를 확인하고 관리합니다."),
         ]),
         h("button", { onClick: props.onClose, style: { background: "none", border: "none", cursor: "pointer", color: t.muted } }, Ico.x({ size: 18 })),
       ]),
       msg && h("div", { key: "msg", style: { fontSize: DS.font.size.sm, color: msg.includes("실패") ? t.red : t.green, fontWeight: DS.font.weight.semibold, marginBottom: DS.spacing.lg } }, msg),
       h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.xl } }, [
-        // 좌: 관리자 라이선스 카드
+        // 좌: 관리자 라이선스 — Administrator License / Key input / Apply / Type / Status / Version / Copy / Reset / Logout
         Card(t, { key: "admin", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
-          h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: DS.spacing.sm, marginBottom: DS.spacing.lg } }, [
-            h("span", { style: { fontSize: DS.font.size.xs, fontWeight: DS.font.weight.bold, color: "#fff", background: t.accent, borderRadius: DS.radius.pill, padding: `2px ${DS.spacing.md}px` } }, "관리자 (무제한)"),
-          ]),
-          h("div", { key: 2, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.sm, padding: `${DS.spacing.xs}px 0`, color: t.muted }, }, [h("span", {}, "상태"), h("span", { style: { color: isAdmin ? t.accent : t.muted, fontWeight: DS.font.weight.semibold } }, isAdmin ? "활성" : "비활성")]),
-          h("div", { key: 3, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.sm, padding: `${DS.spacing.xs}px 0`, color: t.muted, marginBottom: DS.spacing.lg }, }, [h("span", {}, "버전"), h("span", { style: { fontFamily: MONO, color: t.ink } }, `v${APP_VERSION}`)]),
-          h("div", { key: "div1", style: { borderTop: `1px solid ${t.divider}`, margin: `${DS.spacing.lg}px 0` } }),
-          Field(t, "일반 사용자 라이선스 입력", TextInput(t, {
+          h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.lg } }, "관리자 라이선스"),
+          Field(t, "라이선스 키 입력", TextInput(t, {
             value: serial, onChange: (e) => setSerial(formatSerialInput(e.target.value, setPrefix)),
             placeholder: "SPX-XXXX-XXXX-XXXX-XXXX", style: { fontFamily: MONO, letterSpacing: 1 },
           })),
-          Btn(t, { variant: "accent", onClick: apply, disabled: checking || serial.replace(/-/g, "").length < 16, style: { width: "100%", justifyContent: "center", marginTop: DS.spacing.md, marginBottom: DS.spacing.lg } }, checking ? "확인 중..." : "적용"),
+          Btn(t, { variant: "accent", onClick: apply, disabled: checking || serial.replace(/-/g, "").length < 16, style: { width: "100%", justifyContent: "center", marginTop: DS.spacing.md, marginBottom: DS.spacing.lg } }, checking ? "확인 중..." : "라이선스 적용"),
+          h("div", { key: "div1", style: { borderTop: `1px solid ${t.divider}`, margin: `${DS.spacing.lg}px 0` } }),
+          h("div", { key: "type", style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.sm, padding: `${DS.spacing.xs}px 0`, color: t.muted } }, [h("span", {}, "라이선스 종류"), h("span", { style: { color: t.accent, fontWeight: DS.font.weight.semibold } }, "관리자 (무제한)")]),
+          h("div", { key: "status", style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.sm, padding: `${DS.spacing.xs}px 0`, color: t.muted } }, [h("span", {}, "상태"), h("span", { style: { color: isAdmin ? t.accent : t.muted, fontWeight: DS.font.weight.semibold } }, isAdmin ? "활성" : "비활성")]),
+          h("div", { key: "version", style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.sm, padding: `${DS.spacing.xs}px 0`, color: t.muted, marginBottom: DS.spacing.lg } }, [h("span", {}, "버전"), h("span", { style: { fontFamily: MONO, color: t.ink } }, `v${APP_VERSION}`)]),
           h("div", { key: "div2", style: { borderTop: `1px solid ${t.divider}`, margin: `${DS.spacing.lg}px 0` } }),
           h("div", { key: 4, style: { display: "flex", flexDirection: "column", gap: DS.spacing.sm } }, [
             Btn(t, { variant: "ghost", onClick: copySerial, style: { width: "100%", justifyContent: "center" } }, [Ico.copy({ size: 13 }), " 라이선스 복사"]),
@@ -2171,12 +2178,12 @@ function AdminLicensePanel(props) {
             Btn(t, { variant: "danger", onClick: () => resetLicense("관리자 라이선스를 로그아웃합니다. 계속할까요?"), style: { width: "100%", justifyContent: "center" } }, "관리자 로그아웃"),
           ]),
         ]),
-        // 우: 일반 사용자 라이선스 정보
+        // 우: 현재 사용자(Current User) 라이선스 정보
         Card(t, { key: "info", style: { borderTop: `3px solid ${t.blue}`, boxShadow: DS.shadow.sm } }, [
-          h("div", { key: 1, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.lg } }, "일반 사용자 라이선스 정보"),
+          h("div", { key: 1, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.lg } }, "현재 사용자"),
           h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: DS.spacing.sm, fontSize: DS.font.size.sm } }, [
             h("div", { style: { display: "flex", justifyContent: "space-between" } }, [h("span", { style: { color: t.muted } }, "사용자명"), h("span", { style: { color: t.ink, fontWeight: DS.font.weight.semibold } }, props.company && props.company.name ? props.company.name : "-")]),
-            h("div", { style: { display: "flex", justifyContent: "space-between" } }, [h("span", { style: { color: t.muted } }, "라이선스 종류"), h("span", { style: { color: t.ink, fontWeight: DS.font.weight.semibold } }, license.type === "admin" ? "관리자" : license.activated ? "일반" : "-")]),
+            h("div", { style: { display: "flex", justifyContent: "space-between" } }, [h("span", { style: { color: t.muted } }, "라이선스 종류"), h("span", { style: { color: t.ink, fontWeight: DS.font.weight.semibold } }, typeLabel)]),
             h("div", { style: { display: "flex", justifyContent: "space-between" } }, [h("span", { style: { color: t.muted } }, "상태"), h("span", { style: { color: statusColor, fontWeight: DS.font.weight.bold } }, statusLabel)]),
             h("div", { style: { display: "flex", justifyContent: "space-between" } }, [h("span", { style: { color: t.muted } }, "시작일"), h("span", { style: { color: t.ink, fontFamily: MONO } }, license.type === "admin" ? "-" : fmtDate(license.issuedAt))]),
             h("div", { style: { display: "flex", justifyContent: "space-between" } }, [h("span", { style: { color: t.muted } }, "종료일"), h("span", { style: { color: t.ink, fontFamily: MONO } }, license.type === "admin" ? "무제한" : fmtDate(license.expiresAt))]),

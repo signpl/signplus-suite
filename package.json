@@ -26,6 +26,7 @@
       "main.js",
       "preload.js",
       "license-common.js",
+      "license-service.js",
       "package.json",
       "index.html",
       "renderer/**/*",
