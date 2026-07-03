@@ -1571,6 +1571,23 @@ function quotesForProject(project, allQuotes) {
   return [];
 }
 
+// 프로젝트 상태의 단일 기준(Source of Truth) — 연결된 견적이 있으면 그 중 가장 최근 저장된
+// 견적(quotesForProject가 최신순으로 반환)의 상태를 그대로 따른다. 칸반 수동 이동은 견적이
+// 연결되지 않은 프로젝트에서만 의미가 있으므로, 그 경우에만 저장된 project.status를 사용한다.
+function effectiveProjectStatus(project, allQuotes) {
+  const linked = quotesForProject(project, allQuotes);
+  if (linked.length) return mapQuoteStatus(linked[0].status);
+  return project.status || "상담중";
+}
+
+// 프로젝트 금액의 단일 기준 — 프로젝트는 자체 금액을 갖지 않고, 연결된 견적(가장 최근 저장분)의
+// 판매금액(total, VAT 포함)을 그대로 표시한다. 견적이 없는 구버전 프로젝트만 자체 입력값을 사용한다.
+function effectiveProjectAmount(project, allQuotes) {
+  const linked = quotesForProject(project, allQuotes);
+  if (linked.length) return linked[0].total || 0;
+  return project.amount || 0;
+}
+
 function BarChart(t, data) {
   // data: [{label, value}]
   const max = Math.max(1, ...data.map((d) => d.value));
@@ -1694,11 +1711,11 @@ function ProjectDashboard(props) {
   const quoteStatusCounts = { 상담중: 0, 견적발송: 0, 계약: 0, 시공중: 0, 완료: 0 };
   (quotes || []).forEach((q) => { try { const k = mapQuoteStatus(q && q.status); quoteStatusCounts[k] = (quoteStatusCounts[k] || 0) + 1; } catch (e) { } });
 
-  // 기존 프로젝트 통계
-  const contracted = projects.filter((p) => ["계약", "시공중", "완료"].includes(p.status));
-  const totalPipeline = projects.reduce((s, p) => s + (p.amount || 0), 0);
-  const contractedSum = contracted.reduce((s, p) => s + (p.amount || 0), 0);
-  const doneSum = projects.filter((p) => p.status === "완료").reduce((s, p) => s + (p.amount || 0), 0);
+  // 기존 프로젝트 통계 — 상태·금액 모두 연결된 견적을 단일 기준으로 삼는다(effectiveProjectStatus/Amount)
+  const contracted = projects.filter((p) => ["계약", "시공중", "완료"].includes(effectiveProjectStatus(p, quotes)));
+  const totalPipeline = projects.reduce((s, p) => s + effectiveProjectAmount(p, quotes), 0);
+  const contractedSum = contracted.reduce((s, p) => s + effectiveProjectAmount(p, quotes), 0);
+  const doneSum = projects.filter((p) => effectiveProjectStatus(p, quotes) === "완료").reduce((s, p) => s + effectiveProjectAmount(p, quotes), 0);
   const winRate = projects.length ? Math.round((contracted.length / projects.length) * 100) : 0;
 
   // 월별 견적 매출 (최근 6개월, 견적 데이터 기준)
@@ -1718,8 +1735,8 @@ function ProjectDashboard(props) {
   const daysAgoISO = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
   const periodCutoff = periodFilter === "7일" ? daysAgoISO(7) : periodFilter === "30일" ? daysAgoISO(30) : periodFilter === "90일" ? daysAgoISO(90) : periodFilter === "올해" ? `${new Date().getFullYear()}-01-01` : null;
   let visibleProjects = projects.filter((p) => {
-    if (hideCompleted && p.status === "완료") return false;
-    if (statusFilter !== "전체" && p.status !== statusFilter) return false;
+    if (hideCompleted && effectiveProjectStatus(p, quotes) === "완료") return false;
+    if (statusFilter !== "전체" && effectiveProjectStatus(p, quotes) !== statusFilter) return false;
     if (clientFilter !== "전체" && (p.client || "") !== clientFilter) return false;
     if (periodCutoff && (p.createdAt || "") < periodCutoff) return false;
     if (search) {
@@ -1730,7 +1747,7 @@ function ProjectDashboard(props) {
   });
   visibleProjects = [...visibleProjects].sort((a, b) => {
     if (!!a.favorite !== !!b.favorite) return a.favorite ? -1 : 1;
-    if (sortBy === "amount") return (b.amount || 0) - (a.amount || 0);
+    if (sortBy === "amount") return effectiveProjectAmount(b, quotes) - effectiveProjectAmount(a, quotes);
     return (b.createdAt || "").localeCompare(a.createdAt || "");
   });
   // 프리미엄 KPI 카드: 값 색상과 톤을 맞춘 상단 액센트 바 + 은은한 배경 글로우 + 아이콘 배지(차트/폼/칸반과 통일)
@@ -1869,13 +1886,16 @@ function ProjectDashboard(props) {
             h("span", { key: 1, style: { width: DS.spacing.md, height: DS.spacing.md, borderRadius: DS.radius.pill, background: STATUS_COLOR[status] } }),
             h("span", { key: 2, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink } }, status),
           ]),
-          h("span", { key: 2, style: { fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, color: STATUS_COLOR[status], background: `${STATUS_COLOR[status]}14`, borderRadius: DS.radius.pill, padding: `1px ${DS.spacing.md}px` } }, visibleProjects.filter((p) => p.status === status).length),
+          h("span", { key: 2, style: { fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, color: STATUS_COLOR[status], background: `${STATUS_COLOR[status]}14`, borderRadius: DS.radius.pill, padding: `1px ${DS.spacing.md}px` } }, visibleProjects.filter((p) => effectiveProjectStatus(p, quotes) === status).length),
         ]),
         h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: DS.spacing.md, minHeight: 60 } },
-          visibleProjects.filter((p) => p.status === status).map((p) => {
+          visibleProjects.filter((p) => effectiveProjectStatus(p, quotes) === status).map((p) => {
             const cardAccent = (p.colorTag && COLOR_TAG_MAP[p.colorTag]) || STATUS_COLOR[status];
             const priority = p.priority || "보통";
             const expanded = !!expandedIds[p.id];
+            const linkedQuotes = quotesForProject(p, quotes);
+            const latestQuote = linkedQuotes[0];
+            const isQuoteLinked = linkedQuotes.length > 0;
             return h("div", {
             key: p.id,
             style: {
@@ -1903,15 +1923,19 @@ function ProjectDashboard(props) {
                 IconBtn(t, expanded ? Ico.arrowUp : Ico.arrowDown, () => toggleExpand(p.id)),
               ]),
             ]),
-            h("div", { key: 2, style: { position: "relative", marginTop: DS.spacing.sm, fontSize: DS.font.size.base, fontFamily: MONO, fontWeight: DS.font.weight.bold, color: t.accent } }, won(p.amount)),
-            p.deadline && h("div", { key: 3, style: { position: "relative", fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xs } }, "마감 " + p.deadline),
-            (() => {
-              const linkedQuotes = quotesForProject(p, quotes);
-              return linkedQuotes.length > 0 && h("div", { key: "linked-quote", style: { position: "relative", fontSize: DS.font.size.xs, color: t.blue, marginTop: DS.spacing.xs, display: "flex", alignItems: "center", gap: DS.spacing.xs } }, [Ico.file({ size: 11 }), `연결된 견적 ${linkedQuotes.length}건`]);
-            })(),
+            // 카드 요약 — 견적이 연결된 프로젝트는 "견적 N건 / 총금액 / 상태"를 연결된 견적 기준으로 표시,
+            // 연결된 견적이 없는(구버전) 프로젝트는 기존처럼 자체 금액·마감일을 표시한다.
+            isQuoteLinked
+              ? h("div", { key: "summary", style: { position: "relative", marginTop: DS.spacing.sm, display: "flex", flexDirection: "column", gap: 2 } }, [
+                  h("div", { key: 1, style: { fontSize: DS.font.size.xs, color: t.blue, display: "flex", alignItems: "center", gap: DS.spacing.xs } }, [Ico.file({ size: 11 }), `견적 ${linkedQuotes.length}건`]),
+                  h("div", { key: 2, style: { fontSize: DS.font.size.base, fontFamily: MONO, fontWeight: DS.font.weight.bold, color: t.accent } }, `총금액 ${won(latestQuote.total || 0)}`),
+                  h("div", { key: 3, style: { fontSize: DS.font.size.xs, color: t.muted } }, `상태 ${latestQuote.status || "작성중"}`),
+                ])
+              : h("div", { key: "summary", style: { position: "relative", marginTop: DS.spacing.sm } }, [
+                  h("div", { key: 1, style: { fontSize: DS.font.size.base, fontFamily: MONO, fontWeight: DS.font.weight.bold, color: t.accent } }, won(p.amount)),
+                  p.deadline && h("div", { key: 2, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xs } }, "마감 " + p.deadline),
+                ]),
             expanded && (() => {
-              const linkedQuotes = quotesForProject(p, quotes);
-              const latestQuote = linkedQuotes[0];
               return h("div", { key: "expand", style: { position: "relative", marginTop: DS.spacing.md, display: "flex", flexDirection: "column", gap: DS.spacing.md } }, [
                 // 고객정보 — 프로젝트 자체의 거래처명 + (있다면) 최근 연결 견적의 담당자·연락처
                 h("div", { key: "customer", style: { fontSize: DS.font.size.xs, color: t.muted, display: "flex", flexDirection: "column", gap: 2 } }, [
@@ -1940,9 +1964,9 @@ function ProjectDashboard(props) {
               ]);
             })(),
             h("div", { key: 4, style: { position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: DS.spacing.lg } }, [
-              h("div", { key: "move", style: { display: "flex", gap: DS.spacing.xs } }, [
-                h("button", { key: 1, disabled: status === STATUSES[0], onClick: () => move(p.id, -1), style: { background: "none", border: "none", cursor: "pointer", color: t.muted, opacity: status === STATUSES[0] ? 0.3 : 1 } }, Ico.left({ size: 16 })),
-                h("button", { key: 2, disabled: status === STATUSES[STATUSES.length - 1], onClick: () => move(p.id, 1), style: { background: "none", border: "none", cursor: "pointer", color: t.muted, opacity: status === STATUSES[STATUSES.length - 1] ? 0.3 : 1 } }, Ico.right({ size: 16 })),
+              h("div", { key: "move", style: { display: "flex", gap: DS.spacing.xs }, title: isQuoteLinked ? "연결된 견적 상태를 따릅니다 — 견적 계산기에서 상태를 변경하세요" : undefined }, [
+                h("button", { key: 1, disabled: isQuoteLinked || status === STATUSES[0], onClick: () => move(p.id, -1), style: { background: "none", border: "none", cursor: isQuoteLinked ? "default" : "pointer", color: t.muted, opacity: (isQuoteLinked || status === STATUSES[0]) ? 0.3 : 1 } }, Ico.left({ size: 16 })),
+                h("button", { key: 2, disabled: isQuoteLinked || status === STATUSES[STATUSES.length - 1], onClick: () => move(p.id, 1), style: { background: "none", border: "none", cursor: isQuoteLinked ? "default" : "pointer", color: t.muted, opacity: (isQuoteLinked || status === STATUSES[STATUSES.length - 1]) ? 0.3 : 1 } }, Ico.right({ size: 16 })),
               ]),
               h("div", { key: "actions", style: { display: "flex", gap: DS.spacing.xs } }, [
                 IconBtn(t, Ico.edit, () => startEditProject(p)),
