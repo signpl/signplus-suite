@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const ExcelJS = require("exceljs");
+const Database = require("better-sqlite3");
 const { checkSerial } = require("./license-common.js");
 
 /* ------------------------------------------------------------------ */
@@ -36,23 +37,42 @@ ipcMain.handle("license-activate", async (_e, serial) => {
 });
 
 /* ------------------------------------------------------------------ */
-/*  로컬 JSON 저장소                                                     */
+/*  로컬 저장소 — SQLite(key-value) 기반. 이전 버전의 키별 JSON 파일이         */
+/*  남아있으면 최초 실행 시 kv 테이블로 1회 이전한다.                          */
 /* ------------------------------------------------------------------ */
 function getStorageDir() {
   const dir = path.join(app.getPath("userData"), "signplus-suite-data");
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
-function keyToFile(key) {
-  const safe = String(key).replace(/[^a-zA-Z0-9_-]/g, "_");
-  return path.join(getStorageDir(), safe + ".json");
+
+let _db = null;
+function getDb() {
+  if (_db) return _db;
+  const dir = getStorageDir();
+  _db = new Database(path.join(dir, "signplus.db"));
+  _db.pragma("journal_mode = WAL");
+  _db.exec("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+  migrateLegacyJsonFiles(_db, dir);
+  return _db;
+}
+
+function migrateLegacyJsonFiles(db, dir) {
+  const { c } = db.prepare("SELECT COUNT(*) AS c FROM kv").get();
+  if (c > 0) return;
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "license.json");
+  if (!files.length) return;
+  const insert = db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)");
+  const tx = db.transaction((entries) => {
+    for (const [key, value] of entries) insert.run(key, value);
+  });
+  tx(files.map((f) => [f.slice(0, -5), fs.readFileSync(path.join(dir, f), "utf-8")]));
 }
 
 ipcMain.handle("storage-get", async (_e, key) => {
-  const file = keyToFile(key);
-  if (!fs.existsSync(file)) return null;
   try {
-    return fs.readFileSync(file, "utf-8");
+    const row = getDb().prepare("SELECT value FROM kv WHERE key = ?").get(String(key));
+    return row ? row.value : null;
   } catch {
     return null;
   }
@@ -60,7 +80,7 @@ ipcMain.handle("storage-get", async (_e, key) => {
 
 ipcMain.handle("storage-set", async (_e, key, value) => {
   try {
-    fs.writeFileSync(keyToFile(key), value, "utf-8");
+    getDb().prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(key), value);
     return true;
   } catch {
     return false;
@@ -73,13 +93,9 @@ ipcMain.handle("storage-set", async (_e, key, value) => {
 /* ------------------------------------------------------------------ */
 ipcMain.handle("backup-export", async () => {
   try {
-    const dir = getStorageDir();
-    const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "license.json") : [];
+    const rows = getDb().prepare("SELECT key, value FROM kv").all();
     const data = {};
-    for (const f of files) {
-      const key = f.slice(0, -5);
-      data[key] = fs.readFileSync(path.join(dir, f), "utf-8");
-    }
+    for (const row of rows) data[row.key] = row.value;
     const payload = { app: "signplus-suite", exportedAt: new Date().toISOString(), data };
     const { canceled, filePath } = await dialog.showSaveDialog({
       title: "데이터 백업 저장",
@@ -88,7 +104,7 @@ ipcMain.handle("backup-export", async () => {
     });
     if (canceled || !filePath) return { ok: false, canceled: true };
     fs.writeFileSync(filePath, JSON.stringify(payload), "utf-8");
-    return { ok: true, path: filePath, count: files.length };
+    return { ok: true, path: filePath, count: rows.length };
   } catch (err) {
     console.error("[backup-export] 오류:", err);
     return { ok: false, error: String((err && err.message) || err) };
@@ -106,12 +122,14 @@ ipcMain.handle("backup-import", async () => {
     const raw = fs.readFileSync(filePaths[0], "utf-8");
     const payload = JSON.parse(raw);
     if (!payload || typeof payload.data !== "object") return { ok: false, error: "올바른 백업 파일이 아닙니다." };
-    let count = 0;
-    for (const [key, value] of Object.entries(payload.data)) {
-      fs.writeFileSync(keyToFile(key), value, "utf-8");
-      count++;
-    }
-    return { ok: true, count, exportedAt: payload.exportedAt };
+    const db = getDb();
+    const insert = db.prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
+    const entries = Object.entries(payload.data);
+    const tx = db.transaction((items) => {
+      for (const [key, value] of items) insert.run(key, value);
+    });
+    tx(entries);
+    return { ok: true, count: entries.length, exportedAt: payload.exportedAt };
   } catch (err) {
     console.error("[backup-import] 오류:", err);
     return { ok: false, error: String((err && err.message) || err) };
@@ -406,6 +424,15 @@ function createWindow() {
     },
   });
   win.setMenuBarVisibility(false);
+  win.webContents.on("preload-error", (_e, preloadPath, error) => {
+    console.error(`[preload-error] ${preloadPath}: ${(error && error.stack) || error}`);
+  });
+  win.webContents.on("did-fail-load", (_e, errorCode, errorDescription, validatedURL) => {
+    console.error(`[did-fail-load] ${errorCode} ${errorDescription} ${validatedURL}`);
+  });
+  win.webContents.on("render-process-gone", (_e, details) => {
+    console.error(`[render-process-gone] ${JSON.stringify(details)}`);
+  });
   win.loadFile("index.html");
 }
 

@@ -71,6 +71,28 @@ const FONT = `-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretend
 const MONO = `ui-monospace, "SF Mono", Menlo, Consolas, monospace`;
 const APP_VERSION = (typeof window !== "undefined" && (window.__APP_VERSION__ || (window.appInfo && window.appInfo.version))) || "?";
 
+/* ==================================================================== */
+/*  디자인 시스템 토큰 (색상/타이포/Radius/Spacing/그림자/카드·버튼·입력창)   */
+/*  기존 UI는 그대로 두고, 앞으로 새 컴포넌트가 재사용할 값만 정의한다.       */
+/*  색상 변수는 위 THEMES(light/dark)를 그대로 사용 — t.surface, t.ink,      */
+/*  t.accent 등. 여기서는 색상을 제외한 나머지 토큰만 다룬다.                */
+/* ==================================================================== */
+const DS = {
+  radius: { sm: 6, md: 10, lg: 16, pill: 999 },
+  spacing: { xs: 4, sm: 6, md: 8, lg: 12, xl: 16, xxl: 20, xxxl: 24 },
+  font: {
+    family: FONT,
+    mono: MONO,
+    size: { xs: 11, sm: 12, base: 13, md: 14, lg: 16, xl: 19, xxl: 21, display: 24 },
+    weight: { regular: 400, medium: 500, semibold: 600, bold: 700, heavy: 800 },
+  },
+  shadow: {
+    sm: "0 1px 2px rgba(0,0,0,0.06)",
+    md: "0 2px 8px rgba(0,0,0,0.08)",
+    lg: "0 8px 24px rgba(0,0,0,0.12)",
+  },
+};
+
 /* ------------------------------------------------------------------ */
 /*  유틸                                                                */
 /* ------------------------------------------------------------------ */
@@ -151,31 +173,50 @@ const Ico = {
   edit: (p) => Svg(p, [P("M4 20h4l10-10a2 2 0 00-4-4L4 16z")]),
   arrowUp: (p) => Svg(p, [P("M12 19V5M6 11l6-6 6 6")]),
   arrowDown: (p) => Svg(p, [P("M12 5v14M18 13l-6 6-6-6")]),
+  star: (p) => Svg(p, [P("M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.2 6.1-.7z")]),
 };
 
 /* ==================================================================== */
 /*  공용 UI                                                              */
 /* ==================================================================== */
 function Card(t, props, children) {
-  return h("div", { style: { background: t.surface, borderRadius: 16, border: `1px solid ${t.divider}`, padding: 20, ...(props && props.style) } }, children);
+  return h("div", { style: { background: t.surface, borderRadius: DS.radius.lg, border: `1px solid ${t.divider}`, padding: DS.spacing.xxl, ...(props && props.style) } }, children);
 }
+// 페이지 헤더 — KPI 카드와 동일한 액센트 바 + 글로우 모티프로 통일 (시그니처/호출부 동일)
 function SectionTitle(t, title, sub, right) {
-  return h("div", { style: { marginBottom: 16, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 } }, [
-    h("div", { key: 1 }, [
-      h("div", { key: "a", style: { fontSize: 21, fontWeight: 700, color: t.ink, letterSpacing: -0.3 } }, title),
-      sub && h("div", { key: "b", style: { fontSize: 13, color: t.muted, marginTop: 4 } }, sub),
+  return h("div", {
+    style: {
+      position: "relative",
+      overflow: "hidden",
+      marginBottom: DS.spacing.xl,
+      background: t.surface,
+      border: `1px solid ${t.divider}`,
+      borderRadius: DS.radius.lg,
+      padding: DS.spacing.xxl,
+      boxShadow: DS.shadow.sm,
+      display: "flex",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: DS.spacing.lg,
+    },
+  }, [
+    h("div", { key: "bar", style: { position: "absolute", top: 0, left: 0, right: 0, height: 3, background: t.accent } }),
+    h("div", { key: "glow", style: { position: "absolute", right: -18, bottom: -18, width: 72, height: 72, borderRadius: DS.radius.pill, background: `${t.accent}14` } }),
+    h("div", { key: 1, style: { position: "relative" } }, [
+      h("div", { key: "a", style: { fontSize: DS.font.size.xxl, fontWeight: DS.font.weight.bold, color: t.ink, letterSpacing: -0.3 } }, title),
+      sub && h("div", { key: "b", style: { fontSize: DS.font.size.base, color: t.muted, marginTop: DS.spacing.xs } }, sub),
     ]),
-    right && h("div", { key: 2 }, right),
+    right && h("div", { key: 2, style: { position: "relative" } }, right),
   ]);
 }
 function Field(t, label, control) {
-  return h("label", { style: { display: "flex", flexDirection: "column", gap: 6, fontSize: 13 } }, [
-    h("span", { key: 1, style: { color: t.muted, fontWeight: 600 } }, label),
+  return h("label", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.sm, fontSize: DS.font.size.base } }, [
+    h("span", { key: 1, style: { color: t.muted, fontWeight: DS.font.weight.semibold } }, label),
     control,
   ]);
 }
 function inputStyle(t) {
-  return { border: `1px solid ${t.divider}`, borderRadius: 10, padding: "9px 12px", fontSize: 14, color: t.ink, outline: "none", fontFamily: FONT, background: t.surface2, width: "100%" };
+  return { border: `1px solid ${t.divider}`, borderRadius: DS.radius.md, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, fontSize: DS.font.size.md, color: t.ink, outline: "none", fontFamily: DS.font.family, background: t.surface2, width: "100%" };
 }
 function TextInput(t, props) {
   return h("input", { ...props, style: { ...inputStyle(t), ...(props && props.style) } });
@@ -188,7 +229,7 @@ function Sel(t, props, options) {
 }
 function Btn(t, props, children) {
   const variant = (props && props.variant) || "primary";
-  const base = { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, borderRadius: 10, padding: "9px 14px", border: "none", cursor: props && props.disabled ? "not-allowed" : "pointer", opacity: props && props.disabled ? 0.5 : 1, fontFamily: FONT };
+  const base = { display: "inline-flex", alignItems: "center", gap: DS.spacing.sm, fontSize: DS.font.size.base, fontWeight: DS.font.weight.semibold, borderRadius: DS.radius.md, padding: `${DS.spacing.md}px ${DS.spacing.md + DS.spacing.sm}px`, border: "none", cursor: props && props.disabled ? "not-allowed" : "pointer", opacity: props && props.disabled ? 0.5 : 1, fontFamily: DS.font.family };
   const variants = {
     primary: { background: t.ink, color: t.bg },
     accent: { background: t.accent, color: "#fff" },
@@ -199,7 +240,7 @@ function Btn(t, props, children) {
   return h("button", { onClick: props && props.onClick, disabled: props && props.disabled, style: { ...base, ...variants[variant], ...(props && props.style) } }, children);
 }
 function IconBtn(t, icon, onClick, color) {
-  return h("button", { onClick, style: { background: "none", border: "none", cursor: "pointer", color: color || t.muted, display: "inline-flex", alignItems: "center", padding: 3, borderRadius: 6 } }, icon({ size: 16 }));
+  return h("button", { onClick, style: { background: "none", border: "none", cursor: "pointer", color: color || t.muted, display: "inline-flex", alignItems: "center", padding: DS.spacing.xs, borderRadius: DS.radius.sm } }, icon({ size: 16 }));
 }
 
 /* ==================================================================== */
@@ -582,16 +623,16 @@ function QuoteCalculator(props) {
     }
   };
 
-  const th = (label, w, align) => h("th", { key: label, style: { padding: "6px 8px", width: w, textAlign: align || "left", color: t.muted, fontSize: 12, fontWeight: 600 } }, label);
+  const th = (label, w, align) => h("th", { key: label, style: { padding: `${DS.spacing.sm}px ${DS.spacing.md}px`, width: w, textAlign: align || "left", color: t.muted, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, textTransform: "uppercase", letterSpacing: 0.4 } }, label);
 
-  return h("div", { style: { display: "flex", flexDirection: "column", gap: 16 } }, [
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
     SectionTitle(t, "견적 계산기", "수신처·품목을 입력하면 정식 견적서 PDF(로고·도장 포함)로 출력됩니다.",
-      h("div", { style: { display: "flex", gap: 8 } }, [
+      h("div", { style: { display: "flex", gap: DS.spacing.md } }, [
         Btn(t, { key: 1, variant: "ghost", onClick: () => setPresetOpen((o) => !o) }, [Ico.book({ size: 14 }), " 단가 불러오기"]),
       ])
     ),
     // 프리셋 패널 — 제일에코 단가표에서 골라 담기 (카테고리 → 중분류 아코디언)
-    presetOpen && Card(t, { key: "preset", style: { padding: 14 } }, (() => {
+    presetOpen && Card(t, { key: "preset", style: { padding: DS.spacing.lg } }, (() => {
       const cats = PRESET_CATS;
       const isSearching = !!pSearch;
       const q = pSearch.toLowerCase();
@@ -599,48 +640,48 @@ function QuoteCalculator(props) {
 
       const toggleSub = (key) => setExpandedSubs((p) => ({ ...p, [key]: !p[key] }));
 
-      const itemBtn = (pr) => h("button", { key: pr.id, onClick: () => { addPreset(pr); flash(`'${pr.name}' 추가됨`); }, style: { textAlign: "left", background: t.surface, border: `1px solid ${t.divider}`, borderRadius: 9, padding: "8px 10px", cursor: "pointer", color: t.ink, width: "100%" } }, [
-        h("div", { key: 1, style: { fontSize: 12, fontWeight: 600, marginBottom: 2, lineHeight: 1.3 } }, pr.name),
-        h("div", { key: 2, style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, flexWrap: "wrap" } }, [
-          h("span", { key: 1, style: { fontSize: 11.5, color: t.accent, fontWeight: 700, fontFamily: MONO } }, `${won(pr.price)}/${pr.unit}`),
-          pr.spec && h("span", { key: 2, style: { fontSize: 10.5, color: t.muted, fontFamily: MONO } }, pr.spec),
+      const itemBtn = (pr) => h("button", { key: pr.id, onClick: () => { addPreset(pr); flash(`'${pr.name}' 추가됨`); }, style: { textAlign: "left", background: t.surface, border: `1px solid ${t.divider}`, borderRadius: DS.radius.md, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, cursor: "pointer", color: t.ink, width: "100%" } }, [
+        h("div", { key: 1, style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, marginBottom: DS.spacing.xs, lineHeight: 1.3 } }, pr.name),
+        h("div", { key: 2, style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: DS.spacing.sm, flexWrap: "wrap" } }, [
+          h("span", { key: 1, style: { fontSize: DS.font.size.xs, color: t.accent, fontWeight: DS.font.weight.bold, fontFamily: MONO } }, `${won(pr.price)}/${pr.unit}`),
+          pr.spec && h("span", { key: 2, style: { fontSize: DS.font.size.xs, color: t.muted, fontFamily: MONO } }, pr.spec),
         ]),
-        pr.memo && h("div", { key: 3, style: { fontSize: 10, color: t.muted, marginTop: 2 } }, pr.memo),
+        pr.memo && h("div", { key: 3, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xs } }, pr.memo),
       ]);
 
       let body;
       if (isSearching) {
         // 검색 중엔 아코디언 무시하고 평면 결과
         const list = vendorPresets.filter(matchesSearch);
-        body = h("div", { key: "flat", style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 8, maxHeight: 400, overflowY: "auto", paddingRight: 4 } },
+        body = h("div", { key: "flat", style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: DS.spacing.md, maxHeight: 400, overflowY: "auto", paddingRight: DS.spacing.xs } },
           list.length === 0
-            ? [h("div", { key: "e", style: { color: t.muted, fontSize: 13, padding: "20px 0", gridColumn: "1/-1", textAlign: "center" } }, "검색 결과가 없습니다.")]
+            ? [h("div", { key: "e", style: { color: t.muted, fontSize: DS.font.size.base, padding: `${DS.spacing.xxl}px 0`, gridColumn: "1/-1", textAlign: "center" } }, "검색 결과가 없습니다.")]
             : list.map(itemBtn)
         );
       } else {
         // 아코디언: 카테고리 → 중분류 → 품목
         const activeCats = pCat === "전체" ? cats : [pCat];
-        body = h("div", { key: "acc", style: { display: "flex", flexDirection: "column", gap: 6, maxHeight: 440, overflowY: "auto", paddingRight: 4 } },
+        body = h("div", { key: "acc", style: { display: "flex", flexDirection: "column", gap: DS.spacing.sm, maxHeight: 440, overflowY: "auto", paddingRight: DS.spacing.xs } },
           activeCats.map((cat) => {
             const catItems = vendorPresets.filter((p) => (p.cat || "") === cat);
             if (catItems.length === 0) return null;
             const subs = [...new Set(catItems.map((p) => p.sub || "기타"))];
-            return h("div", { key: cat, style: { border: `1px solid ${t.divider}`, borderRadius: 10, overflow: "hidden", flexShrink: 0 } }, [
-              h("div", { key: 0, style: { padding: "9px 12px", background: t.surface2, fontSize: 12.5, fontWeight: 700, color: t.ink, display: "flex", justifyContent: "space-between" } }, [
+            return h("div", { key: cat, style: { border: `1px solid ${t.divider}`, borderRadius: DS.radius.md, overflow: "hidden", flexShrink: 0 } }, [
+              h("div", { key: 0, style: { padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, background: t.surface2, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.ink, display: "flex", justifyContent: "space-between" } }, [
                 h("span", { key: 1 }, cat),
-                h("span", { key: 2, style: { color: t.muted, fontWeight: 500 } }, `${catItems.length}개 품목 · ${subs.length}개 중분류`),
+                h("span", { key: 2, style: { color: t.muted, fontWeight: DS.font.weight.medium } }, `${catItems.length}개 품목 · ${subs.length}개 중분류`),
               ]),
-              h("div", { key: 1, style: { padding: 8, display: "flex", flexDirection: "column", gap: 6 } },
+              h("div", { key: 1, style: { padding: DS.spacing.md, display: "flex", flexDirection: "column", gap: DS.spacing.sm } },
                 subs.map((sub) => {
                   const subItems = catItems.filter((p) => (p.sub || "기타") === sub);
                   const key = cat + "|" + sub;
                   const open = !!expandedSubs[key];
                   return h("div", { key: sub, style: { flexShrink: 0 } }, [
-                    h("button", { key: 0, onClick: () => toggleSub(key), style: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", background: open ? t.accentSoft : "transparent", border: `1px solid ${open ? t.accent : t.divider}`, borderRadius: 8, cursor: "pointer", fontFamily: FONT } }, [
-                      h("span", { key: 1, style: { fontSize: 12, fontWeight: 600, color: t.ink } }, `${open ? "▾" : "▸"} ${sub}`),
-                      h("span", { key: 2, style: { fontSize: 11, color: t.muted } }, `${subItems.length}개`),
+                    h("button", { key: 0, onClick: () => toggleSub(key), style: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: `${DS.spacing.sm}px ${DS.spacing.lg}px`, background: open ? t.accentSoft : "transparent", border: `1px solid ${open ? t.accent : t.divider}`, borderRadius: DS.radius.md, cursor: "pointer", fontFamily: FONT } }, [
+                      h("span", { key: 1, style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, color: t.ink } }, `${open ? "▾" : "▸"} ${sub}`),
+                      h("span", { key: 2, style: { fontSize: DS.font.size.xs, color: t.muted } }, `${subItems.length}개`),
                     ]),
-                    open && h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 6, marginTop: 6, paddingLeft: 4 } }, subItems.map(itemBtn)),
+                    open && h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: DS.spacing.sm, marginTop: DS.spacing.sm, paddingLeft: DS.spacing.xs } }, subItems.map(itemBtn)),
                   ]);
                 })
               ),
@@ -650,43 +691,43 @@ function QuoteCalculator(props) {
       }
 
       return [
-        h("div", { key: 0, style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 } }, [
-          h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" } }, [
-            h("span", { key: 1, style: { fontSize: 12, fontWeight: 700, color: t.muted } }, "거래처"),
-            Sel(t, { value: selectedVendor, onChange: async (e) => { const vid = e.target.value; setSelectedVendor(vid); const vp = await props.loadVendorPresets(vid); setVendorPresets(vp); }, style: { minWidth: 130, padding: "6px 10px", fontSize: 12 } }, (props.vendors || []).map((v) => ({ value: v.id, label: v.name + (v.isDefault ? " (기본)" : "") }))),
-            h("span", { key: 2, style: { fontSize: 11, color: t.muted } }, `— ${vendorPresets.length}개 품목`),
+        h("div", { key: 0, style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: DS.spacing.lg, flexWrap: "wrap", gap: DS.spacing.md } }, [
+          h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: DS.spacing.lg, flexWrap: "wrap" } }, [
+            h("span", { key: 1, style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.muted } }, "거래처"),
+            Sel(t, { value: selectedVendor, onChange: async (e) => { const vid = e.target.value; setSelectedVendor(vid); const vp = await props.loadVendorPresets(vid); setVendorPresets(vp); }, style: { minWidth: 130, padding: `${DS.spacing.sm}px ${DS.spacing.md}px`, fontSize: DS.font.size.sm } }, (props.vendors || []).map((v) => ({ value: v.id, label: v.name + (v.isDefault ? " (기본)" : "") }))),
+            h("span", { key: 2, style: { fontSize: DS.font.size.xs, color: t.muted } }, `— ${vendorPresets.length}개 품목`),
           ]),
-          h("div", { key: 2, style: { fontSize: 11, color: t.muted } }, "카테고리를 펼쳐 품목을 클릭하면 견적에 추가됩니다"),
+          h("div", { key: 2, style: { fontSize: DS.font.size.xs, color: t.muted } }, "카테고리를 펼쳐 품목을 클릭하면 견적에 추가됩니다"),
         ]),
-        h("div", { key: 2, style: { display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "center" } }, [
-          h("div", { key: "c", style: { display: "flex", gap: 4, flexWrap: "wrap" } },
-            ["전체", ...cats].map((c) => h("button", { key: c, onClick: () => setPCat(c), style: { padding: "5px 11px", borderRadius: 8, border: `1px solid ${pCat === c ? t.accent : t.divider}`, background: pCat === c ? t.accent : "transparent", color: pCat === c ? "#fff" : t.ink, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT } }, c))
+        h("div", { key: 2, style: { display: "flex", gap: DS.spacing.sm, marginBottom: DS.spacing.lg, flexWrap: "wrap", alignItems: "center" } }, [
+          h("div", { key: "c", style: { display: "flex", gap: DS.spacing.xs, flexWrap: "wrap" } },
+            ["전체", ...cats].map((c) => h("button", { key: c, onClick: () => setPCat(c), style: { padding: `${DS.spacing.xs}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, border: `1px solid ${pCat === c ? t.accent : t.divider}`, background: pCat === c ? t.accent : "transparent", color: pCat === c ? "#fff" : t.ink, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, cursor: "pointer", fontFamily: FONT } }, c))
           ),
           h("div", { key: "s", style: { flex: 1, minWidth: 160 } }, TextInput(t, { value: pSearch, onChange: (e) => setPSearch(e.target.value), placeholder: "전체 품목·규격 검색... (검색 시 카테고리 무시하고 바로 표시)" })),
         ]),
         body,
       ];
     })()),
-    // 헤더 입력 — 견적정보 + 수신처
-    Card(t, { key: "hdr" }, [
-      h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 } }, [
+    // 헤더 입력 — 견적정보 + 수신처 (프리미엄 액센트 상단 보더로 KPI 카드와 통일)
+    Card(t, { key: "hdr", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.xxl } }, [
         // 좌: 견적 정보
         h("div", { key: 1 }, [
-          h("div", { key: 0, style: { fontSize: 12, fontWeight: 700, color: t.accent, marginBottom: 10, letterSpacing: 1 } }, "견적 정보"),
-          h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } }, [
+          h("div", { key: 0, style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.accent, marginBottom: DS.spacing.lg, letterSpacing: 1, textTransform: "uppercase" } }, "견적 정보"),
+          h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
             Field(t, "견적번호 (자동)", TextInput(t, { value: quoteNo, onChange: (e) => setQuoteNo(e.target.value), style: { fontFamily: MONO } })),
             Field(t, "프로젝트명", TextInput(t, { value: projectName, onChange: (e) => setProjectName(e.target.value), placeholder: "춘천점 채널간판" })),
             Field(t, "견적일자", TextInput(t, { type: "date", value: quoteDate, onChange: (e) => setQuoteDate(e.target.value) })),
             Field(t, "유효기간", TextInput(t, { value: validity, onChange: (e) => setValidity(e.target.value) })),
-            Field(t, "상태", Sel(t, { value: quoteStatus, onChange: (e) => setQuoteStatus(e.target.value), style: { fontWeight: 700, color: quoteStatus === "완료" ? t.green : quoteStatus === "진행중" ? t.accent : quoteStatus === "발주" ? t.blue : t.muted } }, [{ value: "작성중", label: "📝 작성중" }, { value: "발주", label: "📋 발주" }, { value: "진행중", label: "🔨 진행중" }, { value: "완료", label: "✅ 완료" }])),
+            Field(t, "상태", Sel(t, { value: quoteStatus, onChange: (e) => setQuoteStatus(e.target.value), style: { fontWeight: DS.font.weight.bold, color: quoteStatus === "완료" ? t.green : quoteStatus === "진행중" ? t.accent : quoteStatus === "발주" ? t.blue : t.muted } }, [{ value: "작성중", label: "📝 작성중" }, { value: "발주", label: "📋 발주" }, { value: "진행중", label: "🔨 진행중" }, { value: "완료", label: "✅ 완료" }])),
           ]),
         ]),
         // 우: 수신처
         h("div", { key: 2 }, [
-          h("div", { key: 0, style: { fontSize: 12, fontWeight: 700, color: t.accent, marginBottom: 10, letterSpacing: 1 } }, "수신처 (고객)"),
-          h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr", gap: 12 } }, [
+          h("div", { key: 0, style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.accent, marginBottom: DS.spacing.lg, letterSpacing: 1, textTransform: "uppercase" } }, "수신처 (고객)"),
+          h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr", gap: DS.spacing.lg } }, [
             Field(t, "상호 / 수신처", TextInput(t, { value: client.name, onChange: setC("name"), placeholder: "㈜○○기업" })),
-            h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } }, [
+            h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
               Field(t, "담당자", TextInput(t, { value: client.manager, onChange: setC("manager"), placeholder: "홍길동 대리" })),
               Field(t, "연락처", TextInput(t, { value: client.tel, onChange: setC("tel"), placeholder: "010-1234-5678" })),
             ]),
@@ -694,54 +735,54 @@ function QuoteCalculator(props) {
         ]),
       ]),
     ]),
-    // 마진율 조절
-    Card(t, { key: "margin", style: { background: marginRate > 0 ? t.accentSoft : t.surface, border: `1px solid ${marginRate > 0 ? t.accent : t.divider}` } }, [
-      h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 } }, [
-        h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 260 } }, [
-          h("div", { key: 1, style: { fontSize: 13, fontWeight: 700, color: t.ink, whiteSpace: "nowrap" } }, "마진율"),
+    // 마진율 조절 — 활성 시 액센트 톤 강화 + 프리미엄 보더/섀도우
+    Card(t, { key: "margin", style: { background: marginRate > 0 ? t.accentSoft : t.surface, border: `1px solid ${marginRate > 0 ? t.accent : t.divider}`, borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: DS.spacing.lg } }, [
+        h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: DS.spacing.lg, flex: 1, minWidth: 260 } }, [
+          h("div", { key: 1, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, whiteSpace: "nowrap" } }, "마진율"),
           h("input", { key: 2, type: "range", min: 0, max: 1000, step: 1, value: marginRate, onChange: (e) => setMarginRate(Number(e.target.value)), style: { flex: 1, accentColor: t.accent } }),
-          h("div", { key: 3, style: { display: "flex", alignItems: "center", gap: 4 } }, [
+          h("div", { key: 3, style: { display: "flex", alignItems: "center", gap: DS.spacing.xs } }, [
             TextInput(t, { type: "number", value: marginRate, onChange: (e) => setMarginRate(Math.max(0, Math.min(1000, Number(e.target.value) || 0))), style: { width: 70, fontFamily: MONO, textAlign: "right" } }),
-            h("span", { key: 2, style: { fontSize: 13, fontWeight: 700, color: t.muted } }, "%"),
+            h("span", { key: 2, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.muted } }, "%"),
           ]),
         ]),
-        h("div", { key: 2, style: { display: "flex", gap: 6, flexWrap: "wrap" } },
-          [0, 10, 20, 30, 50, 100, 200].map((v) => Btn(t, { key: v, variant: marginRate === v ? "accent" : "ghost", onClick: () => setMarginRate(v), style: { padding: "6px 12px", fontSize: 12 } }, `${v}%`))
+        h("div", { key: 2, style: { display: "flex", gap: DS.spacing.sm, flexWrap: "wrap" } },
+          [0, 10, 20, 30, 50, 100, 200].map((v) => Btn(t, { key: v, variant: marginRate === v ? "accent" : "ghost", onClick: () => setMarginRate(v), style: { padding: `${DS.spacing.sm}px ${DS.spacing.lg}px`, fontSize: DS.font.size.sm } }, `${v}%`))
         ),
       ]),
-      marginRate > 0 && h("div", { key: 2, style: { display: "flex", gap: 18, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${t.divider}`, flexWrap: "wrap", fontSize: 12.5 } }, [
-        h("div", { key: 1 }, [h("span", { key: 1, style: { color: t.muted } }, "원가 합계 "), h("span", { key: 2, style: { fontFamily: MONO, fontWeight: 700, color: t.ink } }, won(baseSubtotal))]),
-        h("div", { key: 2 }, [h("span", { key: 1, style: { color: t.muted } }, "마진 금액 "), h("span", { key: 2, style: { fontFamily: MONO, fontWeight: 700, color: t.accent } }, "+" + won(marginAmount))]),
-        h("div", { key: 3 }, [h("span", { key: 1, style: { color: t.muted } }, "판매 공급가 "), h("span", { key: 2, style: { fontFamily: MONO, fontWeight: 700, color: t.ink } }, won(subtotal))]),
+      marginRate > 0 && h("div", { key: 2, style: { display: "flex", gap: DS.spacing.xl, marginTop: DS.spacing.lg, paddingTop: DS.spacing.lg, borderTop: `1px solid ${t.divider}`, flexWrap: "wrap", fontSize: DS.font.size.sm } }, [
+        h("div", { key: 1 }, [h("span", { key: 1, style: { color: t.muted } }, "원가 합계 "), h("span", { key: 2, style: { fontFamily: MONO, fontWeight: DS.font.weight.bold, color: t.ink } }, won(baseSubtotal))]),
+        h("div", { key: 2 }, [h("span", { key: 1, style: { color: t.muted } }, "마진 금액 "), h("span", { key: 2, style: { fontFamily: MONO, fontWeight: DS.font.weight.bold, color: t.accent } }, "+" + won(marginAmount))]),
+        h("div", { key: 3 }, [h("span", { key: 1, style: { color: t.muted } }, "판매 공급가 "), h("span", { key: 2, style: { fontFamily: MONO, fontWeight: DS.font.weight.bold, color: t.ink } }, won(subtotal))]),
       ]),
     ]),
-    // 품목 테이블
-    Card(t, { key: "tbl" }, [
+    // 품목 테이블 — 프리미엄 보더/섀도우 + DS 토큰 (계산 로직/핸들러 동일)
+    Card(t, { key: "tbl", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
       h("div", { key: 1, style: { overflowX: "auto" } }, [
-        h("table", { key: 1, style: { width: "100%", borderCollapse: "collapse", fontSize: 13 } }, [
+        h("table", { key: 1, style: { width: "100%", borderCollapse: "collapse", fontSize: DS.font.size.base } }, [
           h("thead", { key: 1 }, h("tr", {}, [th("품목명"), th("규격 / 사양", 140), th("수량", 60), th("단위", 60), th("원가(단가)", 100, "left"), th("개별마진%", 90, "center"), th("판매단가", 100, "right"), th("금액", 110, "right"), h("th", { key: "z", style: { width: 32 } })])),
           h("tbody", { key: 2 }, items.map((i) => {
             const overridden = !(i.marginOverride === null || i.marginOverride === undefined || i.marginOverride === "");
             return h("tr", { key: i.id, style: { borderTop: `1px solid ${t.divider}` } }, [
-            h("td", { key: 1, style: { padding: 6 } }, TextInput(t, { value: i.name, onChange: (e) => updateItem(i.id, "name", e.target.value), placeholder: "채널 간판" })),
-            h("td", { key: 2, style: { padding: 6 } }, TextInput(t, { value: i.spec, onChange: (e) => updateItem(i.id, "spec", e.target.value), placeholder: "LED 채널 / W3000×H600" })),
-            h("td", { key: 3, style: { padding: 6 } }, TextInput(t, { type: "number", value: i.qty, onChange: (e) => updateItem(i.id, "qty", e.target.value), style: { fontFamily: MONO } })),
-            h("td", { key: 4, style: { padding: 6 } }, TextInput(t, { value: i.unit, onChange: (e) => updateItem(i.id, "unit", e.target.value), placeholder: "식" })),
-            h("td", { key: 5, style: { padding: 6 } }, TextInput(t, { type: "number", value: i.unitPrice, onChange: (e) => updateItem(i.id, "unitPrice", e.target.value), style: { fontFamily: MONO } })),
-            h("td", { key: 6, style: { padding: 6 } }, h("div", { style: { display: "flex", alignItems: "center", gap: 3 } }, [
+            h("td", { key: 1, style: { padding: DS.spacing.sm } }, TextInput(t, { value: i.name, onChange: (e) => updateItem(i.id, "name", e.target.value), placeholder: "채널 간판" })),
+            h("td", { key: 2, style: { padding: DS.spacing.sm } }, TextInput(t, { value: i.spec, onChange: (e) => updateItem(i.id, "spec", e.target.value), placeholder: "LED 채널 / W3000×H600" })),
+            h("td", { key: 3, style: { padding: DS.spacing.sm } }, TextInput(t, { type: "number", value: i.qty, onChange: (e) => updateItem(i.id, "qty", e.target.value), style: { fontFamily: MONO } })),
+            h("td", { key: 4, style: { padding: DS.spacing.sm } }, TextInput(t, { value: i.unit, onChange: (e) => updateItem(i.id, "unit", e.target.value), placeholder: "식" })),
+            h("td", { key: 5, style: { padding: DS.spacing.sm } }, TextInput(t, { type: "number", value: i.unitPrice, onChange: (e) => updateItem(i.id, "unitPrice", e.target.value), style: { fontFamily: MONO } })),
+            h("td", { key: 6, style: { padding: DS.spacing.sm } }, h("div", { style: { display: "flex", alignItems: "center", gap: DS.spacing.xs } }, [
               TextInput(t, { type: "number", value: i.marginOverride === null || i.marginOverride === undefined ? "" : i.marginOverride, onChange: (e) => updateItem(i.id, "marginOverride", e.target.value === "" ? null : e.target.value), placeholder: `${marginRate}`, style: { fontFamily: MONO, textAlign: "center", width: "100%", background: overridden ? t.accentSoft : undefined, borderColor: overridden ? t.accent : undefined } }),
-              overridden && h("button", { key: "x", title: "전체 마진율 따르기", onClick: () => updateItem(i.id, "marginOverride", null), style: { background: "none", border: "none", cursor: "pointer", color: t.muted, fontSize: 13, padding: 0, lineHeight: 1 } }, "×"),
+              overridden && h("button", { key: "x", title: "전체 마진율 따르기", onClick: () => updateItem(i.id, "marginOverride", null), style: { background: "none", border: "none", cursor: "pointer", color: t.muted, fontSize: DS.font.size.base, padding: 0, lineHeight: 1 } }, "×"),
             ])),
-            h("td", { key: 7, style: { padding: 6, textAlign: "right", fontFamily: MONO, color: overridden ? t.blue : (marginRate > 0 ? t.accent : t.muted), fontWeight: 600 } }, won(sellPrice(i))),
-            h("td", { key: 8, style: { padding: 6, textAlign: "right", fontFamily: MONO, color: t.ink, fontWeight: 700 } }, won(lineTotal(i))),
-            h("td", { key: 9, style: { padding: 6, textAlign: "center" } }, IconBtn(t, Ico.trash, () => removeItem(i.id))),
+            h("td", { key: 7, style: { padding: DS.spacing.sm, textAlign: "right", fontFamily: MONO, color: overridden ? t.blue : (marginRate > 0 ? t.accent : t.muted), fontWeight: DS.font.weight.semibold } }, won(sellPrice(i))),
+            h("td", { key: 8, style: { padding: DS.spacing.sm, textAlign: "right", fontFamily: MONO, color: t.ink, fontWeight: DS.font.weight.bold } }, won(lineTotal(i))),
+            h("td", { key: 9, style: { padding: DS.spacing.sm, textAlign: "center" } }, IconBtn(t, Ico.trash, () => removeItem(i.id))),
           ]);
           })),
         ]),
       ]),
-      h("div", { key: 2, style: { marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 } }, [
+      h("div", { key: 2, style: { marginTop: DS.spacing.lg, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: DS.spacing.md } }, [
         Btn(t, { variant: "ghost", onClick: addItem }, [Ico.plus({ size: 14 }), " 항목 추가"]),
-        h("div", { style: { fontSize: 11.5, color: t.muted } }, "※ '개별마진%'을 비워두면 위 전체 마진율을 따르고, 값을 입력하면 그 품목만 별도 마진율이 적용됩니다."),
+        h("div", { style: { fontSize: DS.font.size.xs, color: t.muted } }, "※ '개별마진%'을 비워두면 위 전체 마진율을 따르고, 값을 입력하면 그 품목만 별도 마진율이 적용됩니다."),
       ]),
     ]),
     // 채널 LED 자동계산 도우미
@@ -779,50 +820,50 @@ function QuoteCalculator(props) {
       };
 
       return [
-        h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" } }, [
-          h("div", { key: 0, style: { fontSize: 12.5, fontWeight: 700, color: t.accent } }, "채널 LED 자동계산"),
+        h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: DS.spacing.lg, flexWrap: "wrap" } }, [
+          h("div", { key: 0, style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.accent } }, "채널 LED 자동계산"),
           Field(t, "글자 각수 (mm)", TextInput(t, { type: "number", value: chSize, onChange: (e) => setChSize(e.target.value), placeholder: "700", style: { width: 90, fontFamily: MONO } })),
           Field(t, "글자 수량", TextInput(t, { type: "number", value: chQty, onChange: (e) => setChQty(e.target.value), placeholder: "3", style: { width: 70, fontFamily: MONO } })),
-          h("label", { key: "asm", style: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" } }, [
+          h("label", { key: "asm", style: { display: "flex", alignItems: "center", gap: DS.spacing.sm, fontSize: DS.font.size.sm, cursor: "pointer" } }, [
             h("input", { type: "checkbox", checked: withAssembly, onChange: (e) => setWithAssembly(e.target.checked) }),
             "LED 조립 포함 (350원/개)",
           ]),
-          h("div", { key: "info", style: { fontFamily: MONO, fontSize: 12, color: t.ink } }, `모듈 ${totalModules}개 · ${won(totalModuleCost)}${withAssembly ? " + 조립 " + won(totalAssemblyCost) : ""} = ${won(totalModuleCost + totalAssemblyCost)}`),
-          Btn(t, { key: "add", variant: "accent", onClick: addLedItems, style: { padding: "8px 14px" } }, "견적에 추가"),
+          h("div", { key: "info", style: { fontFamily: MONO, fontSize: DS.font.size.sm, color: t.ink } }, `모듈 ${totalModules}개 · ${won(totalModuleCost)}${withAssembly ? " + 조립 " + won(totalAssemblyCost) : ""} = ${won(totalModuleCost + totalAssemblyCost)}`),
+          Btn(t, { key: "add", variant: "accent", onClick: addLedItems, style: { padding: `${DS.spacing.md}px ${DS.spacing.xl}px` } }, "견적에 추가"),
         ]),
       ];
     })()),
-    // 합계 + 비고 + 로고/도장
-    h("div", { key: "sum", style: { display: "grid", gridTemplateColumns: "1fr 380px", gap: 16 } }, [
-      Card(t, { key: 1 }, [
+    // 합계 + 비고 + 로고/도장 — 프리미엄 보더/섀도우 (계산값은 동일)
+    h("div", { key: "sum", style: { display: "grid", gridTemplateColumns: "1fr 380px", gap: DS.spacing.xl } }, [
+      Card(t, { key: 1, style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
         Field(t, "기타 안내사항 (PDF 하단에 번호로 표시됩니다 · 줄바꿈으로 구분)", TextArea(t, { value: note, onChange: (e) => setNote(e.target.value), rows: 4 })),
-        h("div", { key: 2, style: { display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" } }, [
+        h("div", { key: 2, style: { display: "flex", gap: DS.spacing.md, marginTop: DS.spacing.lg, alignItems: "center", flexWrap: "wrap" } }, [
           Btn(t, { key: 1, variant: "ghost", onClick: pickLogo }, [Ico.image({ size: 14 }), logo ? " 로고 변경" : " 로고 등록"]),
-          logo && h("span", { key: "lc", onClick: clearLogo, style: { fontSize: 11, color: t.green, alignSelf: "center", cursor: "pointer" } }, "✓ 로고 (삭제)"),
+          logo && h("span", { key: "lc", onClick: clearLogo, style: { fontSize: DS.font.size.xs, color: t.green, alignSelf: "center", cursor: "pointer" } }, "✓ 로고 (삭제)"),
           Btn(t, { key: 2, variant: "ghost", onClick: pickStamp }, [Ico.image({ size: 14 }), stamp ? " 도장 변경" : " 도장 등록"]),
-          stamp && h("span", { key: "sc", onClick: clearStamp, style: { fontSize: 11, color: t.green, alignSelf: "center", cursor: "pointer" } }, "✓ 도장 (삭제)"),
+          stamp && h("span", { key: "sc", onClick: clearStamp, style: { fontSize: DS.font.size.xs, color: t.green, alignSelf: "center", cursor: "pointer" } }, "✓ 도장 (삭제)"),
         ]),
-        h("div", { key: 3, style: { fontSize: 11, color: t.muted, marginTop: 8 } }, "※ 공급자(회사) 정보는 좌측 하단 '회사 정보 설정'에서 관리합니다."),
+        h("div", { key: 3, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.md } }, "※ 공급자(회사) 정보는 좌측 하단 '회사 정보 설정'에서 관리합니다."),
       ]),
-      Card(t, { key: 2, style: { background: t.inkPanel } }, [
-        h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", fontSize: 13, color: t.inkPanelMuted, padding: "3px 0" } }, [h("span", { key: 1 }, "공급가액 (VAT 별도)"), h("span", { key: 2, style: { fontFamily: MONO } }, won(subtotal))]),
-        h("div", { key: 2, style: { display: "flex", justifyContent: "space-between", fontSize: 13, color: t.inkPanelMuted, padding: "3px 0" } }, [h("span", { key: 1 }, "부가세 (10%)"), h("span", { key: 2, style: { fontFamily: MONO } }, won(vat))]),
-        h("div", { key: 3, style: { display: "flex", justifyContent: "space-between", fontSize: 19, fontWeight: 700, color: t.inkPanelText, paddingTop: 10, marginTop: 6, borderTop: `1px solid ${t.inkPanelBorder}` } }, [h("span", { key: 1 }, "합계 (VAT 포함)"), h("span", { key: 2, style: { fontFamily: MONO, color: t.accent } }, won(total))]),
+      Card(t, { key: 2, style: { background: t.inkPanel, borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+        h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.base, color: t.inkPanelMuted, padding: `${DS.spacing.xs}px 0` } }, [h("span", { key: 1 }, "공급가액 (VAT 별도)"), h("span", { key: 2, style: { fontFamily: MONO } }, won(subtotal))]),
+        h("div", { key: 2, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.base, color: t.inkPanelMuted, padding: `${DS.spacing.xs}px 0` } }, [h("span", { key: 1 }, "부가세 (10%)"), h("span", { key: 2, style: { fontFamily: MONO } }, won(vat))]),
+        h("div", { key: 3, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.xl, fontWeight: DS.font.weight.bold, color: t.inkPanelText, paddingTop: DS.spacing.lg, marginTop: DS.spacing.sm, borderTop: `1px solid ${t.inkPanelBorder}` } }, [h("span", { key: 1 }, "합계 (VAT 포함)"), h("span", { key: 2, style: { fontFamily: MONO, color: t.accent } }, won(total))]),
       ]),
     ]),
-    // 액션
-    h("div", { key: "act", style: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" } }, [
+    // 액션 — 저장/PDF/엑셀 버튼 로직 동일, 스타일만 DS 토큰
+    h("div", { key: "act", style: { display: "flex", gap: DS.spacing.lg, flexWrap: "wrap", alignItems: "center" } }, [
       Btn(t, { key: 1, variant: "accent", onClick: handleSave }, [Ico.save({ size: 14 }), " 견적 저장"]),
-      h("div", { key: "theme", style: { display: "flex", alignItems: "center", gap: 6 } }, [
-        h("span", { key: 1, style: { fontSize: 12, color: t.muted, fontWeight: 600 } }, "견적서 테마 (PDF·엑셀 공통)"),
-        Sel(t, { value: pdfTheme, onChange: (e) => changePdfTheme(e.target.value), style: { width: 140, padding: "8px 10px", fontSize: 12.5 } }, Object.keys(QUOTE_THEMES).map((k) => ({ value: k, label: QUOTE_THEMES[k].name }))),
+      h("div", { key: "theme", style: { display: "flex", alignItems: "center", gap: DS.spacing.sm } }, [
+        h("span", { key: 1, style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.semibold } }, "견적서 테마 (PDF·엑셀 공통)"),
+        Sel(t, { value: pdfTheme, onChange: (e) => changePdfTheme(e.target.value), style: { width: 140, padding: `${DS.spacing.md}px ${DS.spacing.md}px`, fontSize: DS.font.size.sm } }, Object.keys(QUOTE_THEMES).map((k) => ({ value: k, label: QUOTE_THEMES[k].name }))),
       ]),
       Btn(t, { key: 2, variant: "blue", onClick: handlePdf }, [Ico.pdf({ size: 14 }), " PDF 내보내기"]),
       Btn(t, { key: 3, variant: "ghost", onClick: handleExcel }, [Ico.download({ size: 14 }), " 엑셀 내보내기"]),
-      toast && h("span", { key: 4, style: { fontSize: 13, color: toast.includes("실패") ? t.red : t.green, alignSelf: "center", fontWeight: toast.includes("실패") ? 600 : 400 } }, toast),
+      toast && h("span", { key: 4, style: { fontSize: DS.font.size.base, color: toast.includes("실패") ? t.red : t.green, alignSelf: "center", fontWeight: toast.includes("실패") ? DS.font.weight.semibold : DS.font.weight.regular } }, toast),
     ]),
-    // 저장 목록
-    loaded && saved.length > 0 && Card(t, { key: "saved" }, (() => {
+    // 저장 목록 — 검색/불러오기/삭제 로직 동일, 스타일만 DS 토큰
+    loaded && saved.length > 0 && Card(t, { key: "saved", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, (() => {
       const list = savedSearch
         ? saved.filter((r) => {
             const q = savedSearch.toLowerCase();
@@ -831,26 +872,26 @@ function QuoteCalculator(props) {
           })
         : saved;
       return [
-        h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 10, flexWrap: "wrap" } }, [
-          h("div", { key: 1, style: { fontSize: 13, fontWeight: 700, color: t.muted } }, `저장된 견적 (${list.length})`),
+        h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: DS.spacing.lg, gap: DS.spacing.lg, flexWrap: "wrap" } }, [
+          h("div", { key: 1, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.muted } }, `저장된 견적 (${list.length})`),
           h("div", { key: 2, style: { width: 220 } }, TextInput(t, { value: savedSearch, onChange: (e) => setSavedSearch(e.target.value), placeholder: "상호·견적번호·프로젝트 검색..." })),
         ]),
-        h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto" } }, list.length === 0
-          ? [h("div", { key: "e", style: { color: t.muted, fontSize: 13, padding: "16px 0", textAlign: "center" } }, "검색 결과가 없습니다.")]
+        h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: DS.spacing.md, maxHeight: 300, overflowY: "auto" } }, list.length === 0
+          ? [h("div", { key: "e", style: { color: t.muted, fontSize: DS.font.size.base, padding: `${DS.spacing.xl}px 0`, textAlign: "center" } }, "검색 결과가 없습니다.")]
           : list.map((r) => {
             const statusColor = { "작성중": t.muted, "발주": t.blue, "진행중": t.accent, "완료": t.green };
-            return h("div", { key: r.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: editingId === r.id ? t.accentSoft : t.surface2, borderRadius: 10, border: editingId === r.id ? `1px solid ${t.accent}` : "1px solid transparent" } }, [
-            h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: 10 } }, [
-              h("span", { key: 0, style: { display: "inline-block", padding: "2px 8px", borderRadius: 6, fontSize: 10.5, fontWeight: 700, background: (statusColor[r.status] || t.muted) + "22", color: statusColor[r.status] || t.muted } }, r.status || "작성중"),
+            return h("div", { key: r.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, background: editingId === r.id ? t.accentSoft : t.surface2, borderRadius: DS.radius.md, border: editingId === r.id ? `1px solid ${t.accent}` : "1px solid transparent" } }, [
+            h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: DS.spacing.lg } }, [
+              h("span", { key: 0, style: { display: "inline-block", padding: `2px ${DS.spacing.md}px`, borderRadius: DS.radius.sm, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.bold, background: (statusColor[r.status] || t.muted) + "22", color: statusColor[r.status] || t.muted } }, r.status || "작성중"),
               h("div", { key: 1 }, [
-                h("div", { key: 1, style: { fontWeight: 600, color: t.ink, fontSize: 13 } }, `${r.quoteNo ? r.quoteNo + " · " : ""}${r.projectName || (r.client && r.client.name) || r.clientName || "(제목 없음)"}`),
-                h("div", { key: 2, style: { color: t.muted, fontSize: 12 } }, `${(r.client && r.client.name) || r.clientName || "-"} · ${(r.savedAt || "").slice(0, 10)} · 원가 ${won(r.baseSubtotal || 0)} · 판매 ${won(r.subtotal || r.total || 0)}${r.marginRate ? " · 마진" + r.marginRate + "%" : ""}`),
+                h("div", { key: 1, style: { fontWeight: DS.font.weight.semibold, color: t.ink, fontSize: DS.font.size.base } }, `${r.quoteNo ? r.quoteNo + " · " : ""}${r.projectName || (r.client && r.client.name) || r.clientName || "(제목 없음)"}`),
+                h("div", { key: 2, style: { color: t.muted, fontSize: DS.font.size.sm } }, `${(r.client && r.client.name) || r.clientName || "-"} · ${(r.savedAt || "").slice(0, 10)} · 원가 ${won(r.baseSubtotal || 0)} · 판매 ${won(r.subtotal || r.total || 0)}${r.marginRate ? " · 마진" + r.marginRate + "%" : ""}`),
               ]),
             ]),
-            h("div", { key: 2, style: { display: "flex", gap: 10, alignItems: "center" } }, [
-              h("span", { key: 0, style: { fontFamily: MONO, fontSize: 13, fontWeight: 700, color: t.ink } }, won(r.total || 0)),
-              h("button", { key: 1, onClick: () => handleLoad(r), style: { background: "none", border: "none", cursor: "pointer", color: t.blue, fontSize: 12, fontWeight: 600 } }, "불러오기"),
-              h("button", { key: 2, onClick: () => handleDelete(r.id), style: { background: "none", border: "none", cursor: "pointer", color: t.red, fontSize: 12, fontWeight: 600 } }, "삭제"),
+            h("div", { key: 2, style: { display: "flex", gap: DS.spacing.lg, alignItems: "center" } }, [
+              h("span", { key: 0, style: { fontFamily: MONO, fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink } }, won(r.total || 0)),
+              h("button", { key: 1, onClick: () => handleLoad(r), style: { background: "none", border: "none", cursor: "pointer", color: t.blue, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold } }, "불러오기"),
+              h("button", { key: 2, onClick: () => handleDelete(r.id), style: { background: "none", border: "none", cursor: "pointer", color: t.red, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold } }, "삭제"),
             ]),
           ]);
           })),
@@ -964,25 +1005,25 @@ ${images.length ? `\n[첨부 이미지] ${images.length}장 (앱에 저장됨)` 
 
   const list = search ? saved.filter((r) => `${r.form.client || ""} ${r.form.location || ""} ${r.form.industry || ""}`.toLowerCase().includes(search.toLowerCase())) : saved;
 
-  return h("div", { style: { display: "flex", flexDirection: "column", gap: 16 } }, [
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
     SectionTitle(t, "시안 제작 의뢰서", "상담 내용을 입력하면 디자이너가 바로 작업할 수 있는 의뢰서로 정리됩니다. 간판이 여러 종류면 항목을 추가하세요.",
-      h("div", { style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" } }, [
-        toast && h("span", { key: 0, style: { fontSize: 13, color: toast.includes("실패") ? t.red : t.green, fontWeight: toast.includes("실패") ? 600 : 400 } }, toast),
+      h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center", flexWrap: "wrap" } }, [
+        toast && h("span", { key: 0, style: { fontSize: DS.font.size.base, color: toast.includes("실패") ? t.red : t.green, fontWeight: toast.includes("실패") ? DS.font.weight.semibold : DS.font.weight.regular } }, toast),
         editingId && Btn(t, { key: 1, variant: "ghost", onClick: handleNew }, "새 의뢰서"),
         Btn(t, { key: 2, variant: "blue", onClick: handlePdf }, [Ico.pdf({ size: 14 }), " PDF 저장"]),
         Btn(t, { key: 3, variant: "accent", onClick: handleSave }, [Ico.save({ size: 14 }), editingId ? " 수정 저장" : " 저장"]),
       ])
     ),
-    h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 } }, [
-      Card(t, { key: 1 }, h("div", { style: { display: "flex", flexDirection: "column", gap: 12 } }, [
-        h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } }, [
+    h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.xl } }, [
+      Card(t, { key: 1, style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
+        h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
           Field(t, "거래처", TextInput(t, { value: f.client, onChange: set("client"), placeholder: "예: 서민막국수" })),
           Field(t, "업종", TextInput(t, { value: f.industry, onChange: set("industry"), placeholder: "예: 음식점" })),
         ]),
         Field(t, "건물 / 설치 위치", TextInput(t, { value: f.location, onChange: set("location"), placeholder: "예: 건물 정면 파사드 전체" })),
-        h("div", { key: 5, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } }, [
-          Field(t, "브랜드 컬러", h("div", { style: { display: "flex", gap: 8, alignItems: "center" } }, [
-            h("input", { key: 1, type: "color", value: f.brandColor, onChange: set("brandColor"), style: { width: 40, height: 36, border: `1px solid ${t.divider}`, borderRadius: 8, padding: 0, background: "none" } }),
+        h("div", { key: 5, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
+          Field(t, "브랜드 컬러", h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center" } }, [
+            h("input", { key: 1, type: "color", value: f.brandColor, onChange: set("brandColor"), style: { width: 40, height: 36, border: `1px solid ${t.divider}`, borderRadius: DS.radius.sm, padding: 0, background: "none" } }),
             TextInput(t, { value: f.brandColor, onChange: set("brandColor"), style: { flex: 1, fontFamily: MONO } }),
           ])),
           Field(t, "폰트 느낌", Sel(t, { value: f.fontMood, onChange: set("fontMood") }, FONT_MOODS)),
@@ -990,46 +1031,46 @@ ${images.length ? `\n[첨부 이미지] ${images.length}장 (앱에 저장됨)` 
         Field(t, "시공 참고사항", TextArea(t, { value: f.installNote, onChange: set("installNote"), rows: 3, placeholder: "여백, 고정 방식, 하지 작업 등" })),
         // 이미지 첨부
         Field(t, "현장 사진 · 참고 이미지", h("div", {}, [
-          h("div", { key: 1, style: { display: "flex", gap: 8, alignItems: "center", marginBottom: images.length ? 10 : 0 } }, [
+          h("div", { key: 1, style: { display: "flex", gap: DS.spacing.md, alignItems: "center", marginBottom: images.length ? DS.spacing.lg : 0 } }, [
             Btn(t, { key: 1, variant: "ghost", onClick: addImage }, [Ico.plus({ size: 14 }), " 이미지 추가"]),
-            h("span", { key: 2, style: { fontSize: 11.5, color: t.muted } }, "또는 Ctrl+V로 붙여넣기"),
+            h("span", { key: 2, style: { fontSize: DS.font.size.xs, color: t.muted } }, "또는 Ctrl+V로 붙여넣기"),
           ]),
-          images.length > 0 && h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 8 } },
-            images.map((im) => h("div", { key: im.id, style: { position: "relative", borderRadius: 8, overflow: "hidden", border: `1px solid ${t.divider}`, aspectRatio: "1", background: t.surface2 } }, [
+          images.length > 0 && h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: DS.spacing.md } },
+            images.map((im) => h("div", { key: im.id, style: { position: "relative", borderRadius: DS.radius.md, overflow: "hidden", border: `1px solid ${t.divider}`, aspectRatio: "1", background: t.surface2 } }, [
               h("img", { key: 1, src: im.data, style: { width: "100%", height: "100%", objectFit: "cover", display: "block" } }),
-              h("button", { key: 2, onClick: () => removeImage(im.id), style: { position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: 6, border: "none", background: "rgba(0,0,0,0.6)", color: "#fff", cursor: "pointer", fontSize: 12, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" } }, "×"),
+              h("button", { key: 2, onClick: () => removeImage(im.id), style: { position: "absolute", top: DS.spacing.xs, right: DS.spacing.xs, width: 20, height: 20, borderRadius: DS.radius.sm, border: "none", background: "rgba(0,0,0,0.6)", color: "#fff", cursor: "pointer", fontSize: DS.font.size.sm, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" } }, "×"),
             ]))
           ),
         ])),
       ])),
       // 우측: 미리보기 + 이미지
-      Card(t, { key: 2, style: { background: t.inkPanel, position: "relative" } }, [
-        h("div", { key: 1, style: { position: "absolute", top: 16, right: 16 } }, Btn(t, { variant: copied ? "accent" : "ghost", onClick: copy, style: { borderColor: t.inkPanelBorder, color: "#fff" } }, [copied ? Ico.check({ size: 14 }) : Ico.copy({ size: 14 }), copied ? " 복사됨" : " 복사하기"])),
-        h("pre", { key: 2, style: { whiteSpace: "pre-wrap", fontFamily: MONO, fontSize: 12.5, lineHeight: 1.7, color: t.inkPanelText, marginTop: 44, maxHeight: 480, overflowY: "auto" } }, briefText),
-        images.length > 0 && h("div", { key: 3, style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 8, marginTop: 12 } },
-          images.map((im) => h("img", { key: im.id, src: im.data, style: { width: "100%", borderRadius: 8, display: "block", border: `1px solid ${t.inkPanelBorder}` } }))
+      Card(t, { key: 2, style: { background: t.inkPanel, position: "relative", borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+        h("div", { key: 1, style: { position: "absolute", top: DS.spacing.xl, right: DS.spacing.xl } }, Btn(t, { variant: copied ? "accent" : "ghost", onClick: copy, style: { borderColor: t.inkPanelBorder, color: "#fff" } }, [copied ? Ico.check({ size: 14 }) : Ico.copy({ size: 14 }), copied ? " 복사됨" : " 복사하기"])),
+        h("pre", { key: 2, style: { whiteSpace: "pre-wrap", fontFamily: MONO, fontSize: DS.font.size.sm, lineHeight: 1.7, color: t.inkPanelText, marginTop: DS.spacing.xxl * 2 + DS.spacing.xs, maxHeight: 480, overflowY: "auto" } }, briefText),
+        images.length > 0 && h("div", { key: 3, style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: DS.spacing.md, marginTop: DS.spacing.lg } },
+          images.map((im) => h("img", { key: im.id, src: im.data, style: { width: "100%", borderRadius: DS.radius.md, display: "block", border: `1px solid ${t.inkPanelBorder}` } }))
         ),
       ]),
     ]),
     // 간판 제작 항목 목록 (여러 종류 추가 가능)
-    Card(t, { key: "signItems" }, [
-      h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } }, [
-        h("div", { key: 1, style: { fontSize: 13, fontWeight: 700, color: t.accent } }, `간판 제작 항목 (${signItems.length}건)`),
+    Card(t, { key: "signItems", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: DS.spacing.lg } }, [
+        h("div", { key: 1, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.accent } }, `간판 제작 항목 (${signItems.length}건)`),
         Btn(t, { key: 2, variant: "ghost", onClick: addSignItem }, [Ico.plus({ size: 14 }), " 간판 항목 추가"]),
       ]),
-      h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: 12 } },
-        signItems.map((s, idx) => h("div", { key: s.id, style: { border: `1px solid ${t.divider}`, borderRadius: 12, padding: 14, background: t.surface2 } }, [
-          h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } }, [
-            h("div", { key: 1, style: { fontSize: 12, fontWeight: 700, color: t.muted } }, `#${idx + 1}`),
-            signItems.length > 1 && h("button", { key: 2, onClick: () => removeSignItem(s.id), style: { background: "none", border: "none", cursor: "pointer", color: t.red, fontSize: 12, fontWeight: 600 } }, "삭제"),
+      h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } },
+        signItems.map((s, idx) => h("div", { key: s.id, style: { border: `1px solid ${t.divider}`, borderRadius: DS.radius.lg, padding: DS.spacing.lg, background: t.surface2 } }, [
+          h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: DS.spacing.lg } }, [
+            h("div", { key: 1, style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.muted } }, `#${idx + 1}`),
+            signItems.length > 1 && h("button", { key: 2, onClick: () => removeSignItem(s.id), style: { background: "none", border: "none", cursor: "pointer", color: t.red, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold } }, "삭제"),
           ]),
-          h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1.4fr 0.8fr 0.8fr 1.2fr", gap: 10, marginBottom: 10 } }, [
+          h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1.4fr 0.8fr 0.8fr 1.2fr", gap: DS.spacing.lg, marginBottom: DS.spacing.lg } }, [
             Field(t, "간판 종류", Sel(t, { value: s.signType, onChange: (e) => updateSignItem(s.id, "signType", e.target.value) }, SIGN_TYPES)),
             Field(t, "가로 (mm)", TextInput(t, { value: s.width, onChange: (e) => updateSignItem(s.id, "width", e.target.value), placeholder: "3000" })),
             Field(t, "높이 (mm)", TextInput(t, { value: s.height, onChange: (e) => updateSignItem(s.id, "height", e.target.value), placeholder: "800" })),
             Field(t, "설치 위치", TextInput(t, { value: s.location, onChange: (e) => updateSignItem(s.id, "location", e.target.value), placeholder: "예: 정면 상단" })),
           ]),
-          h("div", { key: 3, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } }, [
+          h("div", { key: 3, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
             Field(t, "주간 시각 효과", TextInput(t, { value: s.dayEffect, onChange: (e) => updateSignItem(s.id, "dayEffect", e.target.value), placeholder: "예: 무광 화이트 아크릴" })),
             Field(t, "야간 시각 효과", TextInput(t, { value: s.nightEffect, onChange: (e) => updateSignItem(s.id, "nightEffect", e.target.value), placeholder: "예: 백색 LED 후면 간접조명" })),
           ]),
@@ -1037,24 +1078,24 @@ ${images.length ? `\n[첨부 이미지] ${images.length}장 (앱에 저장됨)` 
       ),
     ]),
     // 저장된 의뢰서 목록
-    loaded && saved.length > 0 && Card(t, { key: "saved" }, [
-      h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 10, flexWrap: "wrap" } }, [
-        h("div", { key: 1, style: { fontSize: 13, fontWeight: 700, color: t.muted } }, `저장된 의뢰서 (${list.length})`),
+    loaded && saved.length > 0 && Card(t, { key: "saved", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: DS.spacing.lg, gap: DS.spacing.lg, flexWrap: "wrap" } }, [
+        h("div", { key: 1, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.muted } }, `저장된 의뢰서 (${list.length})`),
         h("div", { key: 2, style: { width: 220 } }, TextInput(t, { value: search, onChange: (e) => setSearch(e.target.value), placeholder: "거래처·위치·업종 검색..." })),
       ]),
-      h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto" } }, list.length === 0
-        ? [h("div", { key: "e", style: { color: t.muted, fontSize: 13, padding: "16px 0", textAlign: "center" } }, "검색 결과가 없습니다.")]
-        : list.map((r) => h("div", { key: r.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: editingId === r.id ? t.accentSoft : t.surface2, borderRadius: 10, border: editingId === r.id ? `1px solid ${t.accent}` : "1px solid transparent" } }, [
-          h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: 10 } }, [
-            (r.images && r.images.length) ? h("img", { key: 0, src: r.images[0].data, style: { width: 34, height: 34, borderRadius: 6, objectFit: "cover" } }) : null,
+      h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: DS.spacing.md, maxHeight: 300, overflowY: "auto" } }, list.length === 0
+        ? [h("div", { key: "e", style: { color: t.muted, fontSize: DS.font.size.base, padding: `${DS.spacing.xl}px 0`, textAlign: "center" } }, "검색 결과가 없습니다.")]
+        : list.map((r) => h("div", { key: r.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, background: editingId === r.id ? t.accentSoft : t.surface2, borderRadius: DS.radius.md, border: editingId === r.id ? `1px solid ${t.accent}` : "1px solid transparent" } }, [
+          h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: DS.spacing.lg } }, [
+            (r.images && r.images.length) ? h("img", { key: 0, src: r.images[0].data, style: { width: 34, height: 34, borderRadius: DS.radius.sm, objectFit: "cover" } }) : null,
             h("div", { key: 1 }, [
-              h("div", { key: 1, style: { fontWeight: 600, color: t.ink, fontSize: 13 } }, `${r.form.client || "(거래처 없음)"} · ${(r.signItems && r.signItems.length) || 1}건`),
-              h("div", { key: 2, style: { color: t.muted, fontSize: 12 } }, `${r.form.location || "-"} · ${(r.savedAt || "").slice(0, 10)}${r.images && r.images.length ? " · 사진 " + r.images.length + "장" : ""}`),
+              h("div", { key: 1, style: { fontWeight: DS.font.weight.semibold, color: t.ink, fontSize: DS.font.size.base } }, `${r.form.client || "(거래처 없음)"} · ${(r.signItems && r.signItems.length) || 1}건`),
+              h("div", { key: 2, style: { color: t.muted, fontSize: DS.font.size.sm } }, `${r.form.location || "-"} · ${(r.savedAt || "").slice(0, 10)}${r.images && r.images.length ? " · 사진 " + r.images.length + "장" : ""}`),
             ]),
           ]),
-          h("div", { key: 2, style: { display: "flex", gap: 10 } }, [
-            h("button", { key: 1, onClick: () => handleLoad(r), style: { background: "none", border: "none", cursor: "pointer", color: t.blue, fontSize: 12, fontWeight: 600 } }, "열기"),
-            h("button", { key: 2, onClick: () => handleDelete(r.id), style: { background: "none", border: "none", cursor: "pointer", color: t.red, fontSize: 12, fontWeight: 600 } }, "삭제"),
+          h("div", { key: 2, style: { display: "flex", gap: DS.spacing.lg } }, [
+            h("button", { key: 1, onClick: () => handleLoad(r), style: { background: "none", border: "none", cursor: "pointer", color: t.blue, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold } }, "열기"),
+            h("button", { key: 2, onClick: () => handleDelete(r.id), style: { background: "none", border: "none", cursor: "pointer", color: t.red, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold } }, "삭제"),
           ]),
         ]))),
     ]),
@@ -1087,9 +1128,9 @@ function LedCalculator(props) {
     style: { flex: 1, justifyContent: "center" },
   }, label);
 
-  return h("div", { style: { display: "flex", flexDirection: "column", gap: 16 } }, [
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
     SectionTitle(t, "LED 계산기", "채널 간판 LED 모듈 · LED 형광등 · 전광판 스펙을 계산합니다."),
-    h("div", { key: "tabs", style: { display: "flex", gap: 8 } }, [
+    h("div", { key: "tabs", style: { display: "flex", gap: DS.spacing.md } }, [
       subTab("channel", "채널 LED 모듈"),
       subTab("tube", "LED 형광등"),
       subTab("board", "전광판 스펙"),
@@ -1129,25 +1170,26 @@ function ChannelLedCalc(props) {
   const smpsCost = smpsQty * (Number(smpsPrice) || 0);
   const assemblyCost = moduleCount * (Number(assemblyPrice) || 0);
 
-  const Stat = (label, value, unit, accent) => Card(t, { key: label, style: { padding: 14, background: t.surface2 } }, [
-    h("div", { key: 1, style: { fontSize: 12, color: t.muted, fontWeight: 600, marginBottom: 4 } }, label),
-    h("div", { key: 2, style: { fontSize: 20, fontFamily: MONO, fontWeight: 700, color: accent ? t.accent : t.ink } }, [value, " ", h("span", { key: 1, style: { fontSize: 12, color: t.muted, fontWeight: 500 } }, unit)]),
+  // 프리미엄 SaaS 스타일 — DS 토큰만 사용 (계산식/상태는 전혀 변경하지 않음)
+  const Stat = (label, value, unit, accent) => Card(t, { key: label, style: { padding: DS.spacing.lg, background: t.surface2, borderTop: `3px solid ${accent ? t.accent : t.divider}`, boxShadow: DS.shadow.sm } }, [
+    h("div", { key: 1, style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.semibold, marginBottom: DS.spacing.xs } }, label),
+    h("div", { key: 2, style: { fontSize: DS.font.size.xxl, fontFamily: MONO, fontWeight: DS.font.weight.bold, color: accent ? t.accent : t.ink } }, [value, " ", h("span", { key: 1, style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.medium } }, unit)]),
   ]);
 
-  return h("div", { style: { display: "flex", flexDirection: "column", gap: 14 } }, [
-    Card(t, { key: 1 }, [
-      h("div", { key: "m", style: { display: "flex", gap: 8, marginBottom: 14 } }, [
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
+    Card(t, { key: 1, style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: "m", style: { display: "flex", gap: DS.spacing.md, marginBottom: DS.spacing.lg } }, [
         Btn(t, { key: 1, variant: mode === "area" ? "primary" : "ghost", onClick: () => setMode("area"), style: { flex: 1, justifyContent: "center" } }, "면적으로 계산"),
         Btn(t, { key: 2, variant: mode === "count" ? "primary" : "ghost", onClick: () => setMode("count"), style: { flex: 1, justifyContent: "center" } }, "글자 크기로 계산"),
       ]),
       mode === "area"
-        ? h("div", { key: "a", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 } }, [
+        ? h("div", { key: "a", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: DS.spacing.lg } }, [
             Field(t, "채널 총 면적 (㎡)", TextInput(t, { type: "number", value: areaVal, onChange: (e) => setAreaVal(e.target.value), style: { fontFamily: MONO } })),
             Field(t, "모듈 밀도 (개/㎡)", TextInput(t, { type: "number", value: density, onChange: (e) => setDensity(e.target.value), style: { fontFamily: MONO } })),
             Field(t, "모듈 단가 (원)", TextInput(t, { type: "number", value: modPrice, onChange: (e) => setModPrice(e.target.value), style: { fontFamily: MONO } })),
             Field(t, "LED 조립비 (원/개)", TextInput(t, { type: "number", value: assemblyPrice, onChange: (e) => setAssemblyPrice(e.target.value), style: { fontFamily: MONO } })),
           ])
-        : h("div", { key: "c", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 } }, [
+        : h("div", { key: "c", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: DS.spacing.lg } }, [
             Field(t, "글자 가로 (mm)", TextInput(t, { type: "number", value: charW, onChange: (e) => setCharW(e.target.value), style: { fontFamily: MONO } })),
             Field(t, "글자 세로 (mm)", TextInput(t, { type: "number", value: charH, onChange: (e) => setCharH(e.target.value), style: { fontFamily: MONO } })),
             Field(t, "글자 수 (개)", TextInput(t, { type: "number", value: charN, onChange: (e) => setCharN(e.target.value), style: { fontFamily: MONO } })),
@@ -1157,7 +1199,7 @@ function ChannelLedCalc(props) {
             Field(t, "LED 조립비 (원/개)", TextInput(t, { type: "number", value: assemblyPrice, onChange: (e) => setAssemblyPrice(e.target.value), style: { fontFamily: MONO } })),
           ]),
     ]),
-    h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 } }, [
+    h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: DS.spacing.lg } }, [
       Stat("채널 면적", area.toFixed(2), "㎡"),
       Stat("필요 모듈 수", num(moduleCount), "개(3구·1W)", true),
       Stat("소비 전력", num(watt), "W"),
@@ -1166,9 +1208,9 @@ function ChannelLedCalc(props) {
       Stat("SMPS 자재비", num(smpsCost), "원"),
       Stat("LED 조립비", num(assemblyCost), "원", true),
     ]),
-    Card(t, { key: 3, style: { background: t.surface2 } }, [
-      h("div", { key: 1, style: { fontSize: 13, fontWeight: 700, marginBottom: 6, color: t.accent } }, `LED 자재+조립비 합계: ${won(modCost + smpsCost + assemblyCost)}`),
-      h("div", { key: 2, style: { fontSize: 12, color: t.muted, lineHeight: 1.6 } }, `3구 2835 모듈 1개 = 1W 기준. 모듈 밀도는 글자 채움 정도에 따라 조정하세요 (촘촘한 채널 90개/㎡, 보통 75개/㎡, 성긴 채널 60개/㎡). SMPS는 정격의 80%까지만 사용하도록 안전율을 적용해 추천합니다. 조립비는 모듈 1개 부착 기준 개당 단가입니다.`),
+    Card(t, { key: 3, style: { background: t.surface2, borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: 1, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, marginBottom: DS.spacing.sm, color: t.accent } }, `LED 자재+조립비 합계: ${won(modCost + smpsCost + assemblyCost)}`),
+      h("div", { key: 2, style: { fontSize: DS.font.size.sm, color: t.muted, lineHeight: 1.6 } }, `3구 2835 모듈 1개 = 1W 기준. 모듈 밀도는 글자 채움 정도에 따라 조정하세요 (촘촘한 채널 90개/㎡, 보통 75개/㎡, 성긴 채널 60개/㎡). SMPS는 정격의 80%까지만 사용하도록 안전율을 적용해 추천합니다. 조립비는 모듈 1개 부착 기준 개당 단가입니다.`),
     ]),
   ]);
 }
@@ -1201,25 +1243,26 @@ function TubeLedCalc(props) {
   const tubeCost = tubeCount * (Number(tubePrice) || 0);
   const asmCost = tubeCount * (Number(assembly) || 0);
 
-  const Stat = (label, value, unit, accent) => Card(t, { key: label, style: { padding: 14, background: t.surface2 } }, [
-    h("div", { key: 1, style: { fontSize: 12, color: t.muted, fontWeight: 600, marginBottom: 4 } }, label),
-    h("div", { key: 2, style: { fontSize: 20, fontFamily: MONO, fontWeight: 700, color: accent ? t.accent : t.ink } }, [value, " ", h("span", { key: 1, style: { fontSize: 12, color: t.muted, fontWeight: 500 } }, unit)]),
+  // 프리미엄 SaaS 스타일 — DS 토큰만 사용 (계산식/상태는 전혀 변경하지 않음)
+  const Stat = (label, value, unit, accent) => Card(t, { key: label, style: { padding: DS.spacing.lg, background: t.surface2, borderTop: `3px solid ${accent ? t.accent : t.divider}`, boxShadow: DS.shadow.sm } }, [
+    h("div", { key: 1, style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.semibold, marginBottom: DS.spacing.xs } }, label),
+    h("div", { key: 2, style: { fontSize: DS.font.size.xxl, fontFamily: MONO, fontWeight: DS.font.weight.bold, color: accent ? t.accent : t.ink } }, [value, " ", h("span", { key: 1, style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.medium } }, unit)]),
   ]);
 
-  return h("div", { style: { display: "flex", flexDirection: "column", gap: 14 } }, [
-    Card(t, { key: 1 }, [
-      h("div", { key: "m", style: { display: "flex", gap: 8, marginBottom: 14 } }, [
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
+    Card(t, { key: 1, style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: "m", style: { display: "flex", gap: DS.spacing.md, marginBottom: DS.spacing.lg } }, [
         Btn(t, { key: 1, variant: mode === "area" ? "primary" : "ghost", onClick: () => setMode("area"), style: { flex: 1, justifyContent: "center" } }, "면적으로 계산"),
         Btn(t, { key: 2, variant: mode === "box" ? "primary" : "ghost", onClick: () => setMode("box"), style: { flex: 1, justifyContent: "center" } }, "간판 크기로 계산"),
       ]),
       mode === "area"
-        ? h("div", { key: "a", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 } }, [
+        ? h("div", { key: "a", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: DS.spacing.lg } }, [
             Field(t, "면판 총 면적 (㎡)", TextInput(t, { type: "number", value: areaVal, onChange: (e) => setAreaVal(e.target.value), style: { fontFamily: MONO } })),
             Field(t, "형광등 간격 (mm)", TextInput(t, { type: "number", value: spacing, onChange: (e) => setSpacing(e.target.value), style: { fontFamily: MONO } })),
             Field(t, "형광등 단가 (원)", TextInput(t, { type: "number", value: tubePrice, onChange: (e) => setTubePrice(e.target.value), style: { fontFamily: MONO } })),
             Field(t, "등 조립비 (원/개)", TextInput(t, { type: "number", value: assembly, onChange: (e) => setAssembly(e.target.value), style: { fontFamily: MONO } })),
           ])
-        : h("div", { key: "b", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 } }, [
+        : h("div", { key: "b", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: DS.spacing.lg } }, [
             Field(t, "간판 가로 (mm)", TextInput(t, { type: "number", value: boxW, onChange: (e) => setBoxW(e.target.value), style: { fontFamily: MONO } })),
             Field(t, "간판 세로 (mm)", TextInput(t, { type: "number", value: boxH, onChange: (e) => setBoxH(e.target.value), style: { fontFamily: MONO } })),
             Field(t, "간판 개수", TextInput(t, { type: "number", value: boxN, onChange: (e) => setBoxN(e.target.value), style: { fontFamily: MONO } })),
@@ -1228,7 +1271,7 @@ function TubeLedCalc(props) {
             Field(t, "등 조립비 (원/개)", TextInput(t, { type: "number", value: assembly, onChange: (e) => setAssembly(e.target.value), style: { fontFamily: MONO } })),
           ]),
     ]),
-    h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 } }, [
+    h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: DS.spacing.lg } }, [
       Stat("면판 면적", area.toFixed(2), "㎡"),
       Stat("필요 형광등 수", num(tubeCount), "개(20W)", true),
       Stat("소비 전력", num(watt), "W"),
@@ -1236,7 +1279,7 @@ function TubeLedCalc(props) {
       Stat("등 조립비", num(asmCost), "원"),
       Stat("합계", won(tubeCost + asmCost), "", true),
     ]),
-    h("div", { key: 3, style: { fontSize: 12, color: t.muted, padding: "0 4px", lineHeight: 1.6 } }, `* 넘버원 LED 형광등 20W(길이 1200mm) 기준. 형광등 간격 ${spacing}mm로 배열한다고 가정한 근사치입니다. 간판 구조·배열 방식에 따라 달라질 수 있습니다.`),
+    h("div", { key: 3, style: { fontSize: DS.font.size.sm, color: t.muted, padding: `0 ${DS.spacing.xs}px`, lineHeight: 1.6 } }, `* 넘버원 LED 형광등 20W(길이 1200mm) 기준. 형광등 간격 ${spacing}mm로 배열한다고 가정한 근사치입니다. 간판 구조·배열 방식에 따라 달라질 수 있습니다.`),
   ]);
 }
 
@@ -1260,13 +1303,14 @@ function BoardCalc(props) {
   const dailyKwh = (avgPower / 1000) * (Number(hours) || 0);
   const monthlyCost = dailyKwh * 30 * (Number(kwh) || 0);
 
-  const Stat = (label, value, unit, accent) => Card(t, { key: label, style: { padding: 14, background: t.surface2 } }, [
-    h("div", { key: 1, style: { fontSize: 12, color: t.muted, fontWeight: 600, marginBottom: 4 } }, label),
-    h("div", { key: 2, style: { fontSize: 20, fontFamily: MONO, fontWeight: 700, color: accent ? t.accent : t.ink } }, [value, " ", h("span", { key: 1, style: { fontSize: 12, color: t.muted, fontWeight: 500 } }, unit)]),
+  // 프리미엄 SaaS 스타일 — DS 토큰만 사용 (계산식/상태는 전혀 변경하지 않음)
+  const Stat = (label, value, unit, accent) => Card(t, { key: label, style: { padding: DS.spacing.lg, background: t.surface2, borderTop: `3px solid ${accent ? t.accent : t.divider}`, boxShadow: DS.shadow.sm } }, [
+    h("div", { key: 1, style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.semibold, marginBottom: DS.spacing.xs } }, label),
+    h("div", { key: 2, style: { fontSize: DS.font.size.xxl, fontFamily: MONO, fontWeight: DS.font.weight.bold, color: accent ? t.accent : t.ink } }, [value, " ", h("span", { key: 1, style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.medium } }, unit)]),
   ]);
 
-  return h("div", { style: { display: "flex", flexDirection: "column", gap: 14 } }, [
-    Card(t, { key: 1 }, h("div", { style: { display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12 } }, [
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
+    Card(t, { key: 1, style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, h("div", { style: { display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: DS.spacing.lg } }, [
       Field(t, "가로 (m)", TextInput(t, { type: "number", value: w, onChange: (e) => setW(e.target.value), style: { fontFamily: MONO } })),
       Field(t, "세로 (m)", TextInput(t, { type: "number", value: hh, onChange: (e) => setHh(e.target.value), style: { fontFamily: MONO } })),
       Field(t, "픽셀피치", Sel(t, { value: pitch, onChange: (e) => setPitch(e.target.value) }, Object.keys(PITCH_PROFILES).map((k) => ({ value: k, label: "P" + k })))),
@@ -1274,7 +1318,7 @@ function BoardCalc(props) {
       Field(t, "전기요금 (원/kWh)", TextInput(t, { type: "number", value: kwh, onChange: (e) => setKwh(e.target.value), style: { fontFamily: MONO } })),
       Field(t, "일 가동시간 (h)", TextInput(t, { type: "number", value: hours, onChange: (e) => setHours(e.target.value), style: { fontFamily: MONO } })),
     ])),
-    h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 } }, [
+    h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: DS.spacing.lg } }, [
       Stat("총 면적", area.toFixed(1), "m²"),
       Stat("해상도", `${resW} × ${resH}`, "px", true),
       Stat("총 픽셀 수", num(totalPixels), "px"),
@@ -1285,7 +1329,7 @@ function BoardCalc(props) {
       Stat("최소 시청거리", (p * 1).toFixed(1), "m"),
       Stat("권장 시청거리", (p * 3).toFixed(1), "m 이상", true),
     ]),
-    h("div", { key: 3, style: { fontSize: 12, color: t.muted, padding: "0 4px" } }, `* P${pitch} ${envType} 모듈 일반 범위 기준 추정치. 전기료는 평균 전력 × 일 ${hours}시간 × 30일 × 단가로 계산했습니다. SMD/COB 타입, 방열 구조에 따라 달라질 수 있습니다.`),
+    h("div", { key: 3, style: { fontSize: DS.font.size.sm, color: t.muted, padding: `0 ${DS.spacing.xs}px` } }, `* P${pitch} ${envType} 모듈 일반 범위 기준 추정치. 전기료는 평균 전력 × 일 ${hours}시간 × 30일 × 단가로 계산했습니다. SMD/COB 타입, 방열 구조에 따라 달라질 수 있습니다.`),
   ]);
 }
 
@@ -1364,94 +1408,95 @@ function DatabaseManager(props) {
     return true;
   });
 
-  const tabBtn = (id, label) => h("button", { key: id, onClick: () => setTab(id), style: { padding: "8px 16px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: tab === id ? t.accent : "transparent", color: tab === id ? "#fff" : t.muted, fontFamily: FONT } }, label);
-  const th = (label, w) => h("th", { key: label, style: { padding: "6px 8px", width: w, textAlign: "left", color: t.muted, fontSize: 12, fontWeight: 600 } }, label);
+  // 프리미엄 SaaS 스타일 — DS 토큰만 사용 (핸들러/상태/저장 로직은 전혀 변경하지 않음)
+  const tabBtn = (id, label) => h("button", { key: id, onClick: () => setTab(id), style: { padding: `${DS.spacing.md}px ${DS.spacing.xl}px`, borderRadius: DS.radius.md, border: "none", cursor: "pointer", fontSize: DS.font.size.base, fontWeight: DS.font.weight.semibold, background: tab === id ? t.accent : "transparent", color: tab === id ? "#fff" : t.muted, fontFamily: FONT, boxShadow: tab === id ? DS.shadow.sm : "none" } }, label);
+  const th = (label, w) => h("th", { key: label, style: { padding: `${DS.spacing.sm}px ${DS.spacing.md}px`, width: w, textAlign: "left", color: t.muted, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, textTransform: "uppercase", letterSpacing: 0.4 } }, label);
 
-  return h("div", { style: { display: "flex", flexDirection: "column", gap: 16 } }, [
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
     SectionTitle(t, "거래처 · 단가 관리", "거래처 정보와 자재/노무 단가를 관리합니다. 단가는 견적서에서 바로 불러올 수 있습니다.",
-      h("div", { style: { display: "flex", gap: 4, background: t.surface2, padding: 4, borderRadius: 12 } }, [tabBtn("clients", "거래처"), tabBtn("presets", "단가표")])
+      h("div", { style: { display: "flex", gap: DS.spacing.xs, background: t.surface2, padding: DS.spacing.xs, borderRadius: DS.radius.lg } }, [tabBtn("clients", "거래처"), tabBtn("presets", "단가표")])
     ),
     tab === "clients"
-      ? Card(t, { key: "c" }, [
-          h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", marginBottom: 12 } }, [
+      ? h("div", { key: "c", style: { position: "relative", background: t.surface, border: `1px solid ${t.divider}`, borderTop: `3px solid ${t.accent}`, borderRadius: DS.radius.lg, padding: DS.spacing.xxl, boxShadow: DS.shadow.sm } }, [
+          h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", marginBottom: DS.spacing.lg } }, [
             Btn(t, { key: 1, variant: "accent", onClick: addClient }, [Ico.plus({ size: 14 }), " 거래처 추가"]),
-            toast && h("span", { key: 2, style: { fontSize: 13, color: t.green, alignSelf: "center" } }, toast),
+            toast && h("span", { key: 2, style: { fontSize: DS.font.size.base, color: t.green, alignSelf: "center" } }, toast),
           ]),
-          loaded && clients.length === 0 && h("div", { key: 2, style: { textAlign: "center", color: t.muted, fontSize: 13, padding: "30px 0" } }, "등록된 거래처가 없습니다. '거래처 추가'를 눌러 시작하세요."),
+          loaded && clients.length === 0 && h("div", { key: 2, style: { textAlign: "center", color: t.muted, fontSize: DS.font.size.base, padding: `${DS.spacing.xxxl}px 0` } }, "등록된 거래처가 없습니다. '거래처 추가'를 눌러 시작하세요."),
           h("div", { key: 3, style: { overflowX: "auto" } }, clients.length > 0 && h("table", { style: { width: "100%", borderCollapse: "collapse" } }, [
             h("thead", { key: 1 }, h("tr", {}, [th("상호", 140), th("사업자번호", 120), th("대표", 80), th("연락처", 120), th("주소"), th("메모", 140), h("th", { key: "z", style: { width: 32 } })])),
             h("tbody", { key: 2 }, clients.map((c) => h("tr", { key: c.id, style: { borderTop: `1px solid ${t.divider}` } }, [
-              h("td", { key: 1, style: { padding: 5 } }, TextInput(t, { value: c.name, onChange: (e) => updClient(c.id, "name", e.target.value), placeholder: "상호" })),
-              h("td", { key: 2, style: { padding: 5 } }, TextInput(t, { value: c.biznum, onChange: (e) => updClient(c.id, "biznum", e.target.value), placeholder: "000-00-00000" })),
-              h("td", { key: 3, style: { padding: 5 } }, TextInput(t, { value: c.ceo, onChange: (e) => updClient(c.id, "ceo", e.target.value) })),
-              h("td", { key: 4, style: { padding: 5 } }, TextInput(t, { value: c.tel, onChange: (e) => updClient(c.id, "tel", e.target.value) })),
-              h("td", { key: 5, style: { padding: 5 } }, TextInput(t, { value: c.addr, onChange: (e) => updClient(c.id, "addr", e.target.value) })),
-              h("td", { key: 6, style: { padding: 5 } }, TextInput(t, { value: c.memo, onChange: (e) => updClient(c.id, "memo", e.target.value) })),
-              h("td", { key: 7, style: { padding: 5, textAlign: "center" } }, IconBtn(t, Ico.trash, () => delClient(c.id))),
+              h("td", { key: 1, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.name, onChange: (e) => updClient(c.id, "name", e.target.value), placeholder: "상호" })),
+              h("td", { key: 2, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.biznum, onChange: (e) => updClient(c.id, "biznum", e.target.value), placeholder: "000-00-00000" })),
+              h("td", { key: 3, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.ceo, onChange: (e) => updClient(c.id, "ceo", e.target.value) })),
+              h("td", { key: 4, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.tel, onChange: (e) => updClient(c.id, "tel", e.target.value) })),
+              h("td", { key: 5, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.addr, onChange: (e) => updClient(c.id, "addr", e.target.value) })),
+              h("td", { key: 6, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.memo, onChange: (e) => updClient(c.id, "memo", e.target.value) })),
+              h("td", { key: 7, style: { padding: DS.spacing.xs, textAlign: "center" } }, IconBtn(t, Ico.trash, () => delClient(c.id))),
             ]))),
           ])),
         ])
-      : Card(t, { key: "p" }, [
-          h("div", { key: 0, style: { display: "flex", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 } }, [
-            h("div", { key: "a", style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" } }, [
+      : h("div", { key: "p", style: { position: "relative", background: t.surface, border: `1px solid ${t.divider}`, borderTop: `3px solid ${t.accent}`, borderRadius: DS.radius.lg, padding: DS.spacing.xxl, boxShadow: DS.shadow.sm } }, [
+          h("div", { key: 0, style: { display: "flex", justifyContent: "space-between", marginBottom: DS.spacing.lg, flexWrap: "wrap", gap: DS.spacing.md } }, [
+            h("div", { key: "a", style: { display: "flex", gap: DS.spacing.md, alignItems: "center", flexWrap: "wrap" } }, [
               Btn(t, { key: 1, variant: "accent", onClick: addPreset }, [Ico.plus({ size: 14 }), " 단가 추가"]),
               editingLabel
-                ? h("div", { key: 2, style: { display: "flex", gap: 6, alignItems: "center" } }, [
+                ? h("div", { key: 2, style: { display: "flex", gap: DS.spacing.sm, alignItems: "center" } }, [
                     TextInput(t, { value: labelDraft, onChange: (e) => setLabelDraft(e.target.value), placeholder: "공급처 이름", style: { width: 140 }, autoFocus: true }),
                     Btn(t, { key: 1, variant: "ghost", onClick: () => { props.onPresetLabelChange(labelDraft); setEditingLabel(false); } }, "저장"),
                   ])
-                : h("button", { key: 2, onClick: () => { setLabelDraft(presetLabel); setEditingLabel(true); }, style: { display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", color: t.muted, fontSize: 12, fontFamily: FONT } }, [`공급처: ${presetLabel}`, Ico.edit({ size: 12 })]),
+                : h("button", { key: 2, onClick: () => { setLabelDraft(presetLabel); setEditingLabel(true); }, style: { display: "flex", alignItems: "center", gap: DS.spacing.xs, background: "none", border: "none", cursor: "pointer", color: t.muted, fontSize: DS.font.size.sm, fontFamily: FONT } }, [`공급처: ${presetLabel}`, Ico.edit({ size: 12 })]),
             ]),
-            h("div", { key: 2, style: { display: "flex", gap: 8, alignItems: "center" } }, [
-              toast && h("span", { key: 0, style: { fontSize: 13, color: t.green } }, toast),
-              h("span", { key: 1, style: { fontSize: 12, color: t.muted } }, `${filtered.length}개 품목`),
+            h("div", { key: 2, style: { display: "flex", gap: DS.spacing.md, alignItems: "center" } }, [
+              toast && h("span", { key: 0, style: { fontSize: DS.font.size.base, color: t.green } }, toast),
+              h("span", { key: 1, style: { fontSize: DS.font.size.sm, color: t.muted } }, `${filtered.length}개 품목`),
               Btn(t, { key: 2, variant: "ghost", onClick: resetPresets }, `${presetLabel} 기본값 복원`),
             ]),
           ]),
           // 거래처 선택
-          h("div", { key: "vendor", style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${t.divider}` } }, [
-            h("span", { key: 1, style: { fontSize: 12, fontWeight: 700, color: t.muted } }, "거래처"),
-            ...(props.vendors || []).map((v) => h("button", { key: v.id, onClick: () => switchVendor(v.id), style: { padding: "6px 14px", borderRadius: 8, border: `1px solid ${activeVendor === v.id ? t.accent : t.divider}`, background: activeVendor === v.id ? t.accent : "transparent", color: activeVendor === v.id ? "#fff" : t.ink, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: FONT } }, v.name + (v.isDefault ? " (기본)" : ""))),
-            h("div", { key: "add", style: { display: "flex", gap: 4, alignItems: "center" } }, [
-              TextInput(t, { value: newVendorName, onChange: (e) => setNewVendorName(e.target.value), placeholder: "새 거래처명", style: { width: 120, padding: "6px 8px" }, onKeyDown: (e) => { if (e.key === "Enter") handleAddVendor(); } }),
-              Btn(t, { key: 1, variant: "ghost", onClick: handleAddVendor, style: { padding: "6px 10px" } }, [Ico.plus({ size: 12 }), " 추가"]),
+          h("div", { key: "vendor", style: { display: "flex", gap: DS.spacing.md, alignItems: "center", marginBottom: DS.spacing.lg, flexWrap: "wrap", padding: `${DS.spacing.lg}px 0`, borderBottom: `1px solid ${t.divider}` } }, [
+            h("span", { key: 1, style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.muted } }, "거래처"),
+            ...(props.vendors || []).map((v) => h("button", { key: v.id, onClick: () => switchVendor(v.id), style: { padding: `${DS.spacing.sm}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, border: `1px solid ${activeVendor === v.id ? t.accent : t.divider}`, background: activeVendor === v.id ? t.accent : "transparent", color: activeVendor === v.id ? "#fff" : t.ink, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, cursor: "pointer", fontFamily: FONT } }, v.name + (v.isDefault ? " (기본)" : ""))),
+            h("div", { key: "add", style: { display: "flex", gap: DS.spacing.xs, alignItems: "center" } }, [
+              TextInput(t, { value: newVendorName, onChange: (e) => setNewVendorName(e.target.value), placeholder: "새 거래처명", style: { width: 120, padding: `${DS.spacing.sm}px ${DS.spacing.md}px` }, onKeyDown: (e) => { if (e.key === "Enter") handleAddVendor(); } }),
+              Btn(t, { key: 1, variant: "ghost", onClick: handleAddVendor, style: { padding: `${DS.spacing.sm}px ${DS.spacing.md}px` } }, [Ico.plus({ size: 12 }), " 추가"]),
             ]),
-            activeVendor !== "jeil" && h("button", { key: "del", onClick: () => handleRemoveVendor(activeVendor), style: { background: "none", border: "none", cursor: "pointer", color: t.red, fontSize: 12, fontWeight: 600 } }, "현재 거래처 삭제"),
+            activeVendor !== "jeil" && h("button", { key: "del", onClick: () => handleRemoveVendor(activeVendor), style: { background: "none", border: "none", cursor: "pointer", color: t.red, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold } }, "현재 거래처 삭제"),
           ]),
           // 카테고리 필터 + 검색
-          h("div", { key: 1, style: { display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" } }, [
-            h("div", { key: "cats", style: { display: "flex", gap: 4, flexWrap: "wrap" } },
-              cats.map((c) => h("button", { key: c, onClick: () => setCatFilter(c), style: { padding: "6px 12px", borderRadius: 8, border: `1px solid ${catFilter === c ? t.accent : t.divider}`, background: catFilter === c ? t.accent : "transparent", color: catFilter === c ? "#fff" : t.ink, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: FONT } }, c))
+          h("div", { key: 1, style: { display: "flex", gap: DS.spacing.md, marginBottom: DS.spacing.lg, flexWrap: "wrap", alignItems: "center" } }, [
+            h("div", { key: "cats", style: { display: "flex", gap: DS.spacing.xs, flexWrap: "wrap" } },
+              cats.map((c) => h("button", { key: c, onClick: () => setCatFilter(c), style: { padding: `${DS.spacing.sm}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, border: `1px solid ${catFilter === c ? t.accent : t.divider}`, background: catFilter === c ? t.accent : "transparent", color: catFilter === c ? "#fff" : t.ink, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, cursor: "pointer", fontFamily: FONT } }, c))
             ),
             h("div", { key: "search", style: { flex: 1, minWidth: 160 } }, TextInput(t, { value: search, onChange: (e) => setSearch(e.target.value), placeholder: "품목·규격·비고 검색..." })),
           ]),
           h("div", { key: 2, style: { overflowX: "auto", maxHeight: "calc(100vh - 320px)", overflowY: "auto" } }, h("table", { style: { width: "100%", borderCollapse: "collapse" } }, [
             h("thead", { key: 1, style: { position: "sticky", top: 0, background: t.surface, zIndex: 1 } }, h("tr", {}, [th("구분", 90), th("중분류", 130), th("품목명"), th("규격", 100), th("단위", 60), th("단가", 100), th("비고", 150), h("th", { key: "z", style: { width: 32 } })])),
             h("tbody", { key: 2 }, (() => {
-              if (filtered.length === 0) return [h("tr", { key: "empty" }, h("td", { colSpan: 8, style: { textAlign: "center", color: t.muted, fontSize: 13, padding: "30px 0" } }, "해당하는 단가가 없습니다."))];
+              if (filtered.length === 0) return [h("tr", { key: "empty" }, h("td", { colSpan: 8, style: { textAlign: "center", color: t.muted, fontSize: DS.font.size.base, padding: `${DS.spacing.xxxl}px 0` } }, "해당하는 단가가 없습니다."))];
               const rows = [];
               let lastGroup = null;
               filtered.forEach((c) => {
                 const groupKey = (c.cat || "") + "|" + (c.sub || "");
                 if (groupKey !== lastGroup) {
                   lastGroup = groupKey;
-                  rows.push(h("tr", { key: "g-" + groupKey }, h("td", { colSpan: 8, style: { padding: "8px 8px 4px", fontSize: 11, fontWeight: 700, color: t.accent, borderTop: `2px solid ${t.divider}` } }, `${c.cat || ""}${c.sub ? " / " + c.sub : ""}`)));
+                  rows.push(h("tr", { key: "g-" + groupKey }, h("td", { colSpan: 8, style: { padding: `${DS.spacing.md}px ${DS.spacing.md}px ${DS.spacing.xs}px`, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.bold, color: t.accent, borderTop: `2px solid ${t.divider}` } }, `${c.cat || ""}${c.sub ? " / " + c.sub : ""}`)));
                 }
                 rows.push(h("tr", { key: c.id, style: { borderTop: `1px solid ${t.divider}` } }, [
-                  h("td", { key: 1, style: { padding: 4 } }, Sel(t, { value: c.cat || "채널", onChange: (e) => updPreset(c.id, "cat", e.target.value) }, PRESET_CATS)),
-                  h("td", { key: 2, style: { padding: 4 } }, TextInput(t, { value: c.sub || "", onChange: (e) => updPreset(c.id, "sub", e.target.value), placeholder: "중분류" })),
-                  h("td", { key: 3, style: { padding: 4 } }, TextInput(t, { value: c.name || "", onChange: (e) => updPreset(c.id, "name", e.target.value), placeholder: "품목명" })),
-                  h("td", { key: 4, style: { padding: 4 } }, TextInput(t, { value: c.spec || "", onChange: (e) => updPreset(c.id, "spec", e.target.value), placeholder: "규격", style: { fontFamily: MONO } })),
-                  h("td", { key: 5, style: { padding: 4 } }, TextInput(t, { value: c.unit || "", onChange: (e) => updPreset(c.id, "unit", e.target.value) })),
-                  h("td", { key: 6, style: { padding: 4 } }, TextInput(t, { type: "number", value: c.price, onChange: (e) => updPreset(c.id, "price", Number(e.target.value) || 0), style: { fontFamily: MONO } })),
-                  h("td", { key: 7, style: { padding: 4 } }, TextInput(t, { value: c.memo || "", onChange: (e) => updPreset(c.id, "memo", e.target.value) })),
-                  h("td", { key: 8, style: { padding: 4, textAlign: "center" } }, IconBtn(t, Ico.trash, () => delPreset(c.id))),
+                  h("td", { key: 1, style: { padding: DS.spacing.xs } }, Sel(t, { value: c.cat || "채널", onChange: (e) => updPreset(c.id, "cat", e.target.value) }, PRESET_CATS)),
+                  h("td", { key: 2, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.sub || "", onChange: (e) => updPreset(c.id, "sub", e.target.value), placeholder: "중분류" })),
+                  h("td", { key: 3, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.name || "", onChange: (e) => updPreset(c.id, "name", e.target.value), placeholder: "품목명" })),
+                  h("td", { key: 4, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.spec || "", onChange: (e) => updPreset(c.id, "spec", e.target.value), placeholder: "규격", style: { fontFamily: MONO } })),
+                  h("td", { key: 5, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.unit || "", onChange: (e) => updPreset(c.id, "unit", e.target.value) })),
+                  h("td", { key: 6, style: { padding: DS.spacing.xs } }, TextInput(t, { type: "number", value: c.price, onChange: (e) => updPreset(c.id, "price", Number(e.target.value) || 0), style: { fontFamily: MONO } })),
+                  h("td", { key: 7, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.memo || "", onChange: (e) => updPreset(c.id, "memo", e.target.value) })),
+                  h("td", { key: 8, style: { padding: DS.spacing.xs, textAlign: "center" } }, IconBtn(t, Ico.trash, () => delPreset(c.id))),
                 ]));
               });
               return rows;
             })()),
           ])),
-          h("div", { key: 3, style: { fontSize: 11.5, color: t.muted, marginTop: 10, lineHeight: 1.6 } }, `※ ${presetLabel} 자재 단가표(VAT 별도·공급가) 기준. 단가는 시세에 따라 변동되므로 직접 수정해서 쓰세요. 수정 내용은 자동 저장되며 견적 계산기에서 바로 불러올 수 있습니다.`),
+          h("div", { key: 3, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.lg, lineHeight: 1.6 } }, `※ ${presetLabel} 자재 단가표(VAT 별도·공급가) 기준. 단가는 시세에 따라 변동되므로 직접 수정해서 쓰세요. 수정 내용은 자동 저장되며 견적 계산기에서 바로 불러올 수 있습니다.`),
         ]),
   ]);
 }
@@ -1471,9 +1516,9 @@ function BarChart(t, data) {
       const bh = (d.value / max) * (H - pad * 2);
       const x = pad + i * bw + bw * 0.2, y = H - pad - bh, w = bw * 0.6;
       return h("g", { key: "b" + i }, [
-        h("rect", { key: 1, x, y, width: w, height: bh, rx: 4, fill: t.accent, opacity: 0.9 }),
-        h("text", { key: 2, x: x + w / 2, y: H - pad + 14, textAnchor: "middle", fontSize: 10, fill: t.muted }, d.label),
-        d.value > 0 && h("text", { key: 3, x: x + w / 2, y: y - 5, textAnchor: "middle", fontSize: 9, fill: t.ink, fontWeight: 600 }, d.value >= 10000 ? (d.value / 10000).toFixed(0) + "만" : num(d.value)),
+        h("rect", { key: 1, x, y, width: w, height: bh, rx: DS.spacing.xs, fill: t.accent, opacity: 0.9 }),
+        h("text", { key: 2, x: x + w / 2, y: H - pad + 14, textAnchor: "middle", fontSize: DS.font.size.xs, fill: t.muted }, d.label),
+        d.value > 0 && h("text", { key: 3, x: x + w / 2, y: y - 5, textAnchor: "middle", fontSize: DS.font.size.xs, fill: t.ink, fontWeight: DS.font.weight.semibold }, d.value >= 10000 ? (d.value / 10000).toFixed(0) + "만" : num(d.value)),
       ]);
     }),
   ]);
@@ -1485,7 +1530,17 @@ function ProjectDashboard(props) {
   const [quotes, setQuotes] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedQuoteId, setSelectedQuoteId] = useState("");
-  const [form, setForm] = useState({ client: "", name: "", amount: "", deadline: "" });
+  const emptyProjectForm = { client: "", name: "", amount: "", deadline: "", memo: "", priority: "보통", colorTag: "" };
+  const [form, setForm] = useState(emptyProjectForm);
+  // CRM 고도화: 검색/필터/정렬/편집 상태 (기존 상태·로직은 그대로 두고 추가만 함)
+  const [editingProjectId, setEditingProjectId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("전체");
+  const [clientFilter, setClientFilter] = useState("전체");
+  const [periodFilter, setPeriodFilter] = useState("전체");
+  const [sortBy, setSortBy] = useState("latest");
+  const [hideCompleted, setHideCompleted] = useState(false);
+  const [expandedIds, setExpandedIds] = useState({});
 
   useEffect(() => {
     loadKey("sp2-projects", []).then((v) => { setProjects(v); setLoaded(true); });
@@ -1507,11 +1562,26 @@ function ProjectDashboard(props) {
 
   const addProject = () => {
     if (!form.client && !form.name) return;
-    const proj = { id: uid(), ...form, amount: Number(form.amount) || 0, status: "상담중", createdAt: todayISO(), quoteId: selectedQuoteId || null };
-    persist([proj, ...projects]);
-    setForm({ client: "", name: "", amount: "", deadline: "" });
+    if (editingProjectId) {
+      // 수정 저장: 기존 프로젝트의 status/createdAt/quoteId/favorite 등은 그대로 유지하고 폼 필드만 갱신
+      persist(projects.map((p) => (p.id === editingProjectId ? { ...p, ...form, amount: Number(form.amount) || 0 } : p)));
+      setEditingProjectId(null);
+    } else {
+      const proj = { id: uid(), ...form, amount: Number(form.amount) || 0, status: "상담중", createdAt: todayISO(), quoteId: selectedQuoteId || null, favorite: false };
+      persist([proj, ...projects]);
+    }
+    setForm(emptyProjectForm);
     setSelectedQuoteId("");
   };
+  const cancelEditProject = () => { setEditingProjectId(null); setForm(emptyProjectForm); setSelectedQuoteId(""); };
+  const startEditProject = (p) => {
+    setEditingProjectId(p.id);
+    setForm({ client: p.client || "", name: p.name || "", amount: p.amount != null ? p.amount : "", deadline: p.deadline || "", memo: p.memo || "", priority: p.priority || "보통", colorTag: p.colorTag || "" });
+  };
+  const duplicateProject = (p) => persist([{ ...p, id: uid(), createdAt: todayISO(), favorite: false }, ...projects]);
+  const toggleFavorite = (id) => persist(projects.map((p) => (p.id === id ? { ...p, favorite: !p.favorite } : p)));
+  const updateProjectField = (id, field, value) => persist(projects.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
+  const toggleExpand = (id) => setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
   const move = (id, dir) => persist(projects.map((p) => { if (p.id !== id) return p; const idx = STATUSES.indexOf(p.status); return { ...p, status: STATUSES[Math.min(Math.max(idx + dir, 0), STATUSES.length - 1)], ...(STATUSES[Math.min(Math.max(idx + dir, 0), STATUSES.length - 1)] === "완료" ? { completedAt: todayISO() } : {}) }; }));
   const remove = (id) => persist(projects.filter((p) => p.id !== id));
 
@@ -1566,97 +1636,231 @@ function ProjectDashboard(props) {
   const monthData = months.map((m) => ({ label: m.label, value: activeQuotes.filter((q) => (q.savedAt || "").slice(0, 7) === m.key).reduce((s, q) => s + (q.subtotal || q.total || 0), 0) }));
   const monthCostData = months.map((m) => ({ label: m.label, value: activeQuotes.filter((q) => (q.savedAt || "").slice(0, 7) === m.key).reduce((s, q) => s + (q.baseSubtotal || 0), 0) }));
 
-  // Log quotes and status counts for debugging (no UI changes)
-  useEffect(() => {
-    try {
-      const qList = quotes || [];
-      console.log('sp2-quotes total:', qList.length);
-      const counts = {};
-      (qList || []).forEach((qq) => {
-        const st = (qq && qq.status) ? qq.status : '상담중';
-        counts[st] = (counts[st] || 0) + 1;
-      });
-      STATUSES.forEach((s) => console.log(s + ' ' + (counts[s] || 0)));
-    } catch (e) { console.error('quote log error', e); }
-  }, [quotes]);
-
   const STATUS_COLOR = { 상담중: t.muted, 견적발송: t.blue, 계약: t.accent, 시공중: t.purple, 완료: t.green };
-  const KPI = (label, value, color) => Card(t, { key: label, style: { padding: 16 } }, [
-    h("div", { key: 1, style: { fontSize: 12, color: t.muted, fontWeight: 600 } }, label),
-    h("div", { key: 2, style: { fontSize: 22, fontWeight: 700, fontFamily: MONO, color: color || t.ink, marginTop: 6 } }, value),
-  ]);
+  const PRIORITY_COLOR = { 높음: t.red, 보통: t.blue, 낮음: t.muted };
+  const COLOR_TAG_MAP = { accent: t.accent, blue: t.blue, green: t.green, purple: t.purple, red: t.red };
+  const COLOR_TAG_KEYS = ["", "accent", "blue", "green", "purple", "red"];
 
-  return h("div", { style: { display: "flex", flexDirection: "column", gap: 16 } }, [
+  // CRM 검색/필터/정렬 — 칸반에 "표시"되는 목록만 걸러내며, KPI/통계는 원본 projects 기준 그대로 유지
+  const clientOptions = ["전체", ...Array.from(new Set(projects.map((p) => p.client).filter(Boolean)))];
+  const daysAgoISO = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+  const periodCutoff = periodFilter === "7일" ? daysAgoISO(7) : periodFilter === "30일" ? daysAgoISO(30) : periodFilter === "90일" ? daysAgoISO(90) : periodFilter === "올해" ? `${new Date().getFullYear()}-01-01` : null;
+  let visibleProjects = projects.filter((p) => {
+    if (hideCompleted && p.status === "완료") return false;
+    if (statusFilter !== "전체" && p.status !== statusFilter) return false;
+    if (clientFilter !== "전체" && (p.client || "") !== clientFilter) return false;
+    if (periodCutoff && (p.createdAt || "") < periodCutoff) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!((p.client || "") + (p.name || "") + (p.memo || "")).toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+  visibleProjects = [...visibleProjects].sort((a, b) => {
+    if (!!a.favorite !== !!b.favorite) return a.favorite ? -1 : 1;
+    if (sortBy === "amount") return (b.amount || 0) - (a.amount || 0);
+    return (b.createdAt || "").localeCompare(a.createdAt || "");
+  });
+  // 프리미엄 KPI 카드: 값 색상과 톤을 맞춘 상단 액센트 바 + 은은한 배경 글로우 + 아이콘 배지(차트/폼/칸반과 통일)
+  const KPI = (label, value, color, icon) => {
+    const accentColor = color || t.ink;
+    return h("div", {
+      key: label,
+      style: {
+        position: "relative",
+        overflow: "hidden",
+        background: t.surface,
+        border: `1px solid ${t.divider}`,
+        borderRadius: DS.radius.lg,
+        padding: `${DS.spacing.xl}px ${DS.spacing.xxl}px`,
+        boxShadow: DS.shadow.sm,
+      },
+    }, [
+      h("div", { key: "bar", style: { position: "absolute", top: 0, left: 0, right: 0, height: 3, background: accentColor } }),
+      h("div", { key: "glow", style: { position: "absolute", right: -18, bottom: -18, width: 72, height: 72, borderRadius: DS.radius.pill, background: `${accentColor}14` } }),
+      h("div", { key: "head", style: { position: "relative", display: "flex", alignItems: "center", gap: DS.spacing.sm, marginBottom: DS.spacing.sm } }, [
+        h("span", { key: 1, style: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: DS.radius.sm, background: `${accentColor}14`, color: accentColor, flexShrink: 0 } }, (icon || Ico.calc)({ size: 13 })),
+        h("span", { key: 2, style: { fontSize: DS.font.size.xs, color: t.muted, fontWeight: DS.font.weight.semibold, letterSpacing: 0.5, textTransform: "uppercase" } }, label),
+      ]),
+      h("div", { key: 2, style: { position: "relative", fontSize: DS.font.size.display, fontWeight: DS.font.weight.bold, fontFamily: MONO, color: accentColor, marginTop: DS.spacing.xs, letterSpacing: -0.4 } }, value),
+    ]);
+  };
+
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
     SectionTitle(t, "프로젝트 대시보드", "견적 데이터와 프로젝트 파이프라인이 자동으로 연동됩니다."),
-    h("div", { key: "debug", style: { whiteSpace: "pre-line", fontSize: 13, color: t.muted, marginTop: 4 } }, [
-      h("div", { key: "dbg-title", style: { fontWeight: 700, color: t.ink } }, "DEBUG"),
-      h("div", { key: "dbg-total" }, `quotes: ${ (quotes || []).length }`),
-      h("div", { key: "dbg-1" }, `상담중: ${ quoteStatusCounts['상담중'] || 0 }`),
-      h("div", { key: "dbg-2" }, `견적발송: ${ quoteStatusCounts['견적발송'] || 0 }`),
-      h("div", { key: "dbg-3" }, `계약: ${ quoteStatusCounts['계약'] || 0 }`),
-      h("div", { key: "dbg-4" }, `시공중: ${ quoteStatusCounts['시공중'] || 0 }`),
-      h("div", { key: "dbg-5" }, `완료: ${ quoteStatusCounts['완료'] || 0 }`),
-      h("div", { key: "dbg-json", style: { marginTop: 12, whiteSpace: "pre-wrap", fontFamily: MONO, fontSize: 11, color: t.accent } }, quotes && quotes[0] ? JSON.stringify(quotes[0], null, 2) : "No quotes"),
-    ]),
     // 견적 기반 원가/마진 요약
-    activeQuotes.length > 0 && h("div", { key: "q-kpi", style: { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 } }, [
-      KPI("발주·진행 건수", activeQuotes.length + "건"),
-      KPI("총 원가 지출", won(totalBaseCost)),
-      KPI("총 판매 금액", won(totalSellAmount), t.blue),
-      KPI("총 마진 이익", won(totalMargin), totalMargin > 0 ? t.green : t.red),
-      KPI("평균 마진율", (totalBaseCost > 0 ? avgMarginRate : 0) + "%", t.accent),
+    activeQuotes.length > 0 && h("div", { key: "q-kpi", style: { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: DS.spacing.lg } }, [
+      KPI("발주·진행 건수", activeQuotes.length + "건", null, Ico.file),
+      KPI("총 원가 지출", won(totalBaseCost), null, Ico.download),
+      KPI("총 판매 금액", won(totalSellAmount), t.blue, Ico.arrowUp),
+      KPI("총 마진 이익", won(totalMargin), totalMargin > 0 ? t.green : t.red, Ico.zap),
+      KPI("평균 마진율", (totalBaseCost > 0 ? avgMarginRate : 0) + "%", t.accent, Ico.calc),
     ]),
     // 이번 달 요약
-    h("div", { key: "month-kpi", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 } }, [
-      KPI("이번 달 견적", thisMonthQuotes + "건"),
-      KPI("이번 달 원가", won(thisMonthBase)),
-      KPI("이번 달 판매", won(thisMonthSell), t.blue),
-      KPI("이번 달 마진", won(thisMonthMargin), thisMonthMargin > 0 ? t.green : t.red),
+    h("div", { key: "month-kpi", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: DS.spacing.lg } }, [
+      KPI("이번 달 견적", thisMonthQuotes + "건", null, Ico.file),
+      KPI("이번 달 원가", won(thisMonthBase), null, Ico.download),
+      KPI("이번 달 판매", won(thisMonthSell), t.blue, Ico.arrowUp),
+      KPI("이번 달 마진", won(thisMonthMargin), thisMonthMargin > 0 ? t.green : t.red, Ico.zap),
     ]),
     // 기존 파이프라인 KPI
-    h("div", { key: "kpi", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 } }, [
-      KPI("전체 파이프라인", won(totalPipeline)),
-      KPI("계약 금액", won(contractedSum), t.accent),
-      KPI("완료 매출", won(doneSum), t.green),
-      KPI("수주 전환율", winRate + "%", t.blue),
+    h("div", { key: "kpi", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: DS.spacing.lg } }, [
+      KPI("전체 파이프라인", won(totalPipeline), null, Ico.grid),
+      KPI("계약 금액", won(contractedSum), t.accent, Ico.check),
+      KPI("완료 매출", won(doneSum), t.green, Ico.check),
+      KPI("수주 전환율", winRate + "%", t.blue, Ico.arrowUp),
     ]),
     // 차트 + 입력
-    h("div", { key: "chart", style: { display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 } }, [
-      Card(t, { key: 1 }, [h("div", { key: 1, style: { fontSize: 13, fontWeight: 700, color: t.ink, marginBottom: 12 } }, "최근 6개월 견적 매출 (발주/진행/완료)"), BarChart(t, monthData), h("div", { key: 2, style: { fontSize: 11, color: t.muted, marginTop: 8 } }, "※ 견적계산기에서 '발주' 이상 상태로 저장된 견적이 자동으로 집계됩니다.")]),
-      Card(t, { key: 2 }, [
-        h("div", { key: 1, style: { fontSize: 13, fontWeight: 700, color: t.ink, marginBottom: 12 } }, "프로젝트 추가"),
-        h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: 10 } }, [
+    h("div", { key: "chart", style: { display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: DS.spacing.xl } }, [
+      // 프로젝트 파이프라인 차트 카드 — KPI/칸반/추가폼과 동일한 액센트 바 + 글로우 모티프로 통일 (차트/데이터 로직은 동일)
+      h("div", {
+        key: 1,
+        style: {
+          position: "relative",
+          overflow: "hidden",
+          background: t.surface,
+          border: `1px solid ${t.divider}`,
+          borderRadius: DS.radius.lg,
+          padding: DS.spacing.xxl,
+          boxShadow: DS.shadow.sm,
+        },
+      }, [
+        h("div", { key: "bar", style: { position: "absolute", top: 0, left: 0, right: 0, height: 3, background: t.blue } }),
+        h("div", { key: "glow", style: { position: "absolute", right: -18, bottom: -18, width: 72, height: 72, borderRadius: DS.radius.pill, background: `${t.blue}14` } }),
+        h("div", { key: 1, style: { position: "relative", display: "flex", alignItems: "center", gap: DS.spacing.sm, marginBottom: DS.spacing.xl } }, [
+          h("span", { key: 1, style: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: DS.radius.sm, background: `${t.blue}14`, color: t.blue } }, Ico.arrowUp({ size: 13 })),
+          h("span", { key: 2, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink } }, "최근 6개월 견적 매출 (발주/진행/완료)"),
+        ]),
+        h("div", { key: 2, style: { position: "relative" } }, BarChart(t, monthData)),
+        h("div", { key: 3, style: { position: "relative", fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.md } }, "※ 견적계산기에서 '발주' 이상 상태로 저장된 견적이 자동으로 집계됩니다."),
+      ]),
+      // 프로젝트 추가 폼 — KPI 카드와 동일한 액센트 바 + 글로우 모티프로 통일 (입력/버튼 기능은 동일)
+      h("div", {
+        key: 2,
+        style: {
+          position: "relative",
+          overflow: "hidden",
+          background: t.surface,
+          border: `1px solid ${t.divider}`,
+          borderRadius: DS.radius.lg,
+          padding: DS.spacing.xxl,
+          boxShadow: DS.shadow.sm,
+        },
+      }, [
+        h("div", { key: "bar", style: { position: "absolute", top: 0, left: 0, right: 0, height: 3, background: t.accent } }),
+        h("div", { key: "glow", style: { position: "absolute", right: -18, bottom: -18, width: 72, height: 72, borderRadius: DS.radius.pill, background: `${t.accent}14` } }),
+        h("div", { key: 1, style: { position: "relative", display: "flex", alignItems: "center", gap: DS.spacing.sm, marginBottom: DS.spacing.xl } }, [
+          h("span", { key: 1, style: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: DS.radius.sm, background: `${t.accent}14`, color: t.accent } }, (editingProjectId ? Ico.edit : Ico.plus)({ size: 13 })),
+          h("span", { key: 2, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink } }, editingProjectId ? "프로젝트 수정" : "프로젝트 추가"),
+        ]),
+        h("div", { key: 2, style: { position: "relative", display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
           Field(t, "거래처", TextInput(t, { value: form.client, onChange: (e) => setForm({ ...form, client: e.target.value }) })),
           Field(t, "프로젝트명", TextInput(t, { value: form.name, onChange: (e) => setForm({ ...form, name: e.target.value }) })),
-          h("div", { key: 3, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } }, [
+          h("div", { key: 3, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
             Field(t, "금액", TextInput(t, { type: "number", value: form.amount, onChange: (e) => setForm({ ...form, amount: e.target.value }), style: { fontFamily: MONO } })),
             Field(t, "마감일", TextInput(t, { type: "date", value: form.deadline, onChange: (e) => setForm({ ...form, deadline: e.target.value }) })),
           ]),
-          Btn(t, { variant: "accent", onClick: addProject }, [Ico.plus({ size: 14 }), " 추가"]),
+          h("div", { key: 4, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
+            Field(t, "우선순위", Sel(t, { value: form.priority, onChange: (e) => setForm({ ...form, priority: e.target.value }) }, ["높음", "보통", "낮음"])),
+            Field(t, "색상 태그", Sel(t, { value: form.colorTag, onChange: (e) => setForm({ ...form, colorTag: e.target.value }) }, [{ value: "", label: "없음" }, { value: "accent", label: "주황" }, { value: "blue", label: "파랑" }, { value: "green", label: "초록" }, { value: "purple", label: "보라" }, { value: "red", label: "빨강" }])),
+          ]),
+          !editingProjectId && Field(t, "연결할 견적 (선택)", Sel(t, { value: selectedQuoteId, onChange: (e) => setSelectedQuoteId(e.target.value) }, [{ value: "", label: "선택 안함" }, ...quotes.map((q) => ({ value: q.id, label: `${q.quoteNo ? q.quoteNo + " · " : ""}${q.projectName || (q.client && q.client.name) || "(제목 없음)"}` }))])),
+          Field(t, "메모", TextArea(t, { value: form.memo, onChange: (e) => setForm({ ...form, memo: e.target.value }), rows: 2, placeholder: "참고 메모..." })),
+          h("div", { key: 5, style: { display: "flex", gap: DS.spacing.sm } }, [
+            Btn(t, { variant: "accent", onClick: addProject, style: { flex: 1, justifyContent: "center", padding: `${DS.spacing.md}px ${DS.spacing.xl}px`, marginTop: DS.spacing.xs } }, [(editingProjectId ? Ico.save : Ico.plus)({ size: 14 }), editingProjectId ? " 수정 저장" : " 추가"]),
+            editingProjectId && Btn(t, { variant: "ghost", onClick: cancelEditProject, style: { marginTop: DS.spacing.xs } }, "취소"),
+          ]),
         ]),
       ]),
     ]),
-    // 칸반
-    loaded && h("div", { key: "kanban", style: { display: "grid", gridTemplateColumns: `repeat(${STATUSES.length}, 1fr)`, gap: 12 } },
-      STATUSES.map((status) => h("div", { key: status, style: { display: "flex", flexDirection: "column", gap: 8 } }, [
-        h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: 6, padding: "0 4px" } }, [
-          h("span", { key: 1, style: { width: 8, height: 8, borderRadius: 99, background: STATUS_COLOR[status] } }),
-          h("span", { key: 2, style: { fontSize: 13, fontWeight: 700, color: t.ink } }, status),
-          h("span", { key: 3, style: { fontSize: 12, color: t.muted } }, projects.filter((p) => p.status === status).length),
+    // CRM 필터 툴바 (신규) — 검색/상태/거래처/기간/정렬/완료숨기기. 칸반 "표시" 목록만 필터링하며 KPI·통계·계산식에는 영향 없음
+    loaded && h("div", {
+      key: "toolbar",
+      style: { position: "relative", background: t.surface, border: `1px solid ${t.divider}`, borderRadius: DS.radius.lg, padding: DS.spacing.xxl, boxShadow: DS.shadow.sm, display: "flex", gap: DS.spacing.lg, flexWrap: "wrap", alignItems: "center" },
+    }, [
+      h("div", { key: "search", style: { flex: "1 1 220px", minWidth: 180 } }, TextInput(t, { value: search, onChange: (e) => setSearch(e.target.value), placeholder: "프로젝트명·거래처·메모 검색..." })),
+      h("div", { key: "status", style: { width: 130 } }, Sel(t, { value: statusFilter, onChange: (e) => setStatusFilter(e.target.value) }, ["전체", ...STATUSES])),
+      h("div", { key: "client", style: { width: 150 } }, Sel(t, { value: clientFilter, onChange: (e) => setClientFilter(e.target.value) }, clientOptions)),
+      h("div", { key: "period", style: { width: 110 } }, Sel(t, { value: periodFilter, onChange: (e) => setPeriodFilter(e.target.value) }, ["전체", "7일", "30일", "90일", "올해"])),
+      h("div", { key: "sort", style: { width: 110 } }, Sel(t, { value: sortBy, onChange: (e) => setSortBy(e.target.value) }, [{ value: "latest", label: "최신순" }, { value: "amount", label: "금액순" }])),
+      h("label", { key: "hide", style: { display: "flex", alignItems: "center", gap: DS.spacing.xs, fontSize: DS.font.size.sm, color: t.muted, cursor: "pointer", whiteSpace: "nowrap" } }, [
+        h("input", { type: "checkbox", checked: hideCompleted, onChange: (e) => setHideCompleted(e.target.checked) }),
+        "완료 숨기기",
+      ]),
+      h("span", { key: "count", style: { fontSize: DS.font.size.xs, color: t.muted, marginLeft: "auto" } }, `${visibleProjects.length} / ${projects.length}건 표시`),
+    ]),
+    // 칸반 (프로젝트 상태 현황) — KPI 카드와 동일한 액센트 바 + 글로우 모티프로 통일
+    loaded && h("div", { key: "kanban", style: { display: "grid", gridTemplateColumns: `repeat(${STATUSES.length}, 1fr)`, gap: DS.spacing.lg } },
+      STATUSES.map((status) => h("div", { key: status, style: { display: "flex", flexDirection: "column", gap: DS.spacing.md } }, [
+        h("div", { key: 1, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${DS.spacing.xs}px ${DS.spacing.sm}px`, borderBottom: `2px solid ${STATUS_COLOR[status]}` } }, [
+          h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: DS.spacing.sm } }, [
+            h("span", { key: 1, style: { width: DS.spacing.md, height: DS.spacing.md, borderRadius: DS.radius.pill, background: STATUS_COLOR[status] } }),
+            h("span", { key: 2, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink } }, status),
+          ]),
+          h("span", { key: 2, style: { fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, color: STATUS_COLOR[status], background: `${STATUS_COLOR[status]}14`, borderRadius: DS.radius.pill, padding: `1px ${DS.spacing.md}px` } }, visibleProjects.filter((p) => p.status === status).length),
         ]),
-        h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: 8, minHeight: 60 } },
-          projects.filter((p) => p.status === status).map((p) => Card(t, { key: p.id, style: { padding: 12 } }, [
-            h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } }, [
-              h("div", { key: 1 }, [h("div", { key: 1, style: { fontSize: 13, fontWeight: 700, color: t.ink } }, p.name || "(제목 없음)"), h("div", { key: 2, style: { fontSize: 12, color: t.muted, marginTop: 2 } }, p.client || "-")]),
-              IconBtn(t, Ico.x, () => remove(p.id)),
+        h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: DS.spacing.md, minHeight: 60 } },
+          visibleProjects.filter((p) => p.status === status).map((p) => {
+            const cardAccent = (p.colorTag && COLOR_TAG_MAP[p.colorTag]) || STATUS_COLOR[status];
+            const priority = p.priority || "보통";
+            const expanded = !!expandedIds[p.id];
+            return h("div", {
+            key: p.id,
+            style: {
+              position: "relative",
+              overflow: "hidden",
+              background: t.surface,
+              border: `1px solid ${t.divider}`,
+              borderRadius: DS.radius.lg,
+              padding: DS.spacing.lg,
+              boxShadow: DS.shadow.sm,
+            },
+          }, [
+            h("div", { key: "bar", style: { position: "absolute", top: 0, left: 0, right: 0, height: 3, background: cardAccent } }),
+            h("div", { key: "glow", style: { position: "absolute", right: -18, bottom: -18, width: 72, height: 72, borderRadius: DS.radius.pill, background: `${cardAccent}14` } }),
+            h("div", { key: 1, style: { position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: DS.spacing.sm } }, [
+              h("div", { key: 1, style: { display: "flex", alignItems: "flex-start", gap: DS.spacing.xs, minWidth: 0 } }, [
+                IconBtn(t, Ico.star, () => toggleFavorite(p.id), p.favorite ? t.accent : t.divider),
+                h("div", { key: "info", style: { minWidth: 0 } }, [
+                  h("div", { key: 1, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, p.name || "(제목 없음)"),
+                  h("div", { key: 2, style: { fontSize: DS.font.size.sm, color: t.muted, marginTop: DS.spacing.xs } }, p.client || "-"),
+                ]),
+              ]),
+              h("div", { key: 2, style: { display: "flex", alignItems: "center", gap: DS.spacing.xs, flexShrink: 0 } }, [
+                h("span", { key: "prio", style: { fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, color: PRIORITY_COLOR[priority], background: `${PRIORITY_COLOR[priority]}14`, borderRadius: DS.radius.pill, padding: `1px ${DS.spacing.sm}px`, whiteSpace: "nowrap" } }, priority),
+                IconBtn(t, expanded ? Ico.arrowUp : Ico.arrowDown, () => toggleExpand(p.id)),
+              ]),
             ]),
-            h("div", { key: 2, style: { marginTop: 8, fontSize: 13, fontFamily: MONO, fontWeight: 700, color: t.accent } }, won(p.amount)),
-            p.deadline && h("div", { key: 3, style: { fontSize: 11, color: t.muted, marginTop: 2 } }, "마감 " + p.deadline),
-            h("div", { key: 4, style: { display: "flex", justifyContent: "space-between", marginTop: 10 } }, [
-              h("button", { key: 1, disabled: status === STATUSES[0], onClick: () => move(p.id, -1), style: { background: "none", border: "none", cursor: "pointer", color: t.muted, opacity: status === STATUSES[0] ? 0.3 : 1 } }, Ico.left({ size: 16 })),
-              h("button", { key: 2, disabled: status === STATUSES[STATUSES.length - 1], onClick: () => move(p.id, 1), style: { background: "none", border: "none", cursor: "pointer", color: t.muted, opacity: status === STATUSES[STATUSES.length - 1] ? 0.3 : 1 } }, Ico.right({ size: 16 })),
+            h("div", { key: 2, style: { position: "relative", marginTop: DS.spacing.sm, fontSize: DS.font.size.base, fontFamily: MONO, fontWeight: DS.font.weight.bold, color: t.accent } }, won(p.amount)),
+            p.deadline && h("div", { key: 3, style: { position: "relative", fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xs } }, "마감 " + p.deadline),
+            p.quoteId && (() => {
+              const linked = quotes.find((q) => q.id === p.quoteId);
+              return linked && h("div", { key: "linked-quote", style: { position: "relative", fontSize: DS.font.size.xs, color: t.blue, marginTop: DS.spacing.xs, display: "flex", alignItems: "center", gap: DS.spacing.xs } }, [Ico.file({ size: 11 }), `연결된 견적: ${linked.quoteNo || linked.id}`]);
+            })(),
+            expanded && h("div", { key: "expand", style: { position: "relative", marginTop: DS.spacing.md, display: "flex", flexDirection: "column", gap: DS.spacing.sm } }, [
+              TextArea(t, { value: p.memo || "", onChange: (e) => updateProjectField(p.id, "memo", e.target.value), placeholder: "메모 추가...", rows: 2, style: { fontSize: DS.font.size.sm } }),
+              h("div", { key: "tags", style: { display: "flex", gap: DS.spacing.xs, alignItems: "center" } },
+                COLOR_TAG_KEYS.map((ck) => h("button", {
+                  key: ck || "none",
+                  title: ck || "태그 없음",
+                  onClick: () => updateProjectField(p.id, "colorTag", ck),
+                  style: { width: 16, height: 16, borderRadius: DS.radius.pill, cursor: "pointer", padding: 0, background: ck ? COLOR_TAG_MAP[ck] : "transparent", border: (p.colorTag || "") === ck ? `2px solid ${t.ink}` : `1px solid ${t.divider}` },
+                }))
+              ),
             ]),
-          ]))
+            h("div", { key: 4, style: { position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: DS.spacing.lg } }, [
+              h("div", { key: "move", style: { display: "flex", gap: DS.spacing.xs } }, [
+                h("button", { key: 1, disabled: status === STATUSES[0], onClick: () => move(p.id, -1), style: { background: "none", border: "none", cursor: "pointer", color: t.muted, opacity: status === STATUSES[0] ? 0.3 : 1 } }, Ico.left({ size: 16 })),
+                h("button", { key: 2, disabled: status === STATUSES[STATUSES.length - 1], onClick: () => move(p.id, 1), style: { background: "none", border: "none", cursor: "pointer", color: t.muted, opacity: status === STATUSES[STATUSES.length - 1] ? 0.3 : 1 } }, Ico.right({ size: 16 })),
+              ]),
+              h("div", { key: "actions", style: { display: "flex", gap: DS.spacing.xs } }, [
+                IconBtn(t, Ico.edit, () => startEditProject(p)),
+                IconBtn(t, Ico.copy, () => duplicateProject(p)),
+                IconBtn(t, Ico.x, () => remove(p.id)),
+              ]),
+            ]),
+          ]);
+          })
         ),
       ]))
     ),
@@ -1715,23 +1919,27 @@ function LicenseGate(props) {
     }
   };
 
+  // 프리미엄 SaaS 스타일 — DS 토큰만 사용 (인증/시리얼 검증 로직은 전혀 변경하지 않음)
   return h("div", { style: { height: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT } },
-    h("div", { style: { width: 420, background: t.surface, border: `1px solid ${t.divider}`, borderRadius: 20, padding: 36, textAlign: "center" } }, [
-      h("div", { key: 1, style: { fontSize: 20, fontWeight: 800, color: t.ink, marginBottom: 4 } }, ["Signplus", h("span", { key: 1, style: { color: t.accent } }, "+")]),
-      h("div", { key: 2, style: { fontSize: 13, color: t.muted, marginBottom: wasExpired ? 8 : 28 } }, "정품 인증이 필요합니다"),
-      wasExpired && h("div", { key: "exp", style: { fontSize: 12, color: t.red, background: t.red + "18", borderRadius: 8, padding: "8px 10px", marginBottom: 20, fontWeight: 600 } }, "사용 기간(30일)이 만료되었습니다. 새 시리얼을 입력해주세요."),
-      h("div", { key: 3, style: { textAlign: "left", marginBottom: 8 } }, [
-        h("label", { key: 1, style: { fontSize: 12, fontWeight: 600, color: t.muted } }, "시리얼 번호"),
+    h("div", { style: { position: "relative", width: 420, background: t.surface, border: `1px solid ${t.divider}`, borderTop: `3px solid ${t.accent}`, borderRadius: `${DS.radius.lg + DS.spacing.xs}px`, boxShadow: DS.shadow.lg, padding: `${DS.spacing.xxxl + DS.spacing.lg}px`, textAlign: "center" } }, [
+      h("div", { key: "logo", style: { display: "flex", alignItems: "center", justifyContent: "center", gap: DS.spacing.md, marginBottom: DS.spacing.md } }, [
+        h("div", { key: "mark", style: { width: 36, height: 36, borderRadius: DS.radius.md, background: t.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: DS.font.size.lg, fontWeight: DS.font.weight.heavy, boxShadow: DS.shadow.sm, flexShrink: 0 } }, "S"),
+        h("div", { key: 1, style: { fontSize: DS.font.size.xxl, fontWeight: DS.font.weight.heavy, color: t.ink } }, ["Signplus", h("span", { key: 1, style: { color: t.accent } }, "+")]),
+      ]),
+      h("div", { key: 2, style: { fontSize: DS.font.size.base, color: t.muted, marginBottom: wasExpired ? DS.spacing.md : (DS.spacing.xxxl + DS.spacing.xs) } }, "정품 인증이 필요합니다"),
+      wasExpired && h("div", { key: "exp", style: { fontSize: DS.font.size.xs, color: t.red, background: t.red + "18", borderRadius: DS.radius.sm, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, marginBottom: DS.spacing.xxl, fontWeight: DS.font.weight.semibold } }, "사용 기간(30일)이 만료되었습니다. 새 시리얼을 입력해주세요."),
+      h("div", { key: 3, style: { textAlign: "left", marginBottom: DS.spacing.md } }, [
+        h("label", { key: 1, style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, color: t.muted } }, "시리얼 번호"),
       ]),
       h("input", {
         key: 4, value: serial, onChange: (e) => setSerial(formatSerial(e.target.value)),
         placeholder: "SPX-XXXX-XXXX-XXXX-XXXX",
         onKeyDown: (e) => { if (e.key === "Enter" && serial.length >= 16) activate(); },
-        style: { width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${error ? t.red : t.divider}`, fontFamily: MONO, fontSize: 15, letterSpacing: 1, textAlign: "center", outline: "none", boxSizing: "border-box", background: t.bg, color: t.ink, marginBottom: 14 },
+        style: { width: "100%", padding: `${DS.spacing.lg}px ${DS.spacing.md + DS.spacing.sm}px`, borderRadius: DS.radius.md, border: `1px solid ${error ? t.red : t.divider}`, fontFamily: MONO, fontSize: DS.font.size.lg, letterSpacing: 1, textAlign: "center", outline: "none", boxSizing: "border-box", background: t.bg, color: t.ink, marginBottom: DS.spacing.md + DS.spacing.sm },
       }),
-      error && h("div", { key: 5, style: { fontSize: 12.5, color: t.red, marginBottom: 14, fontWeight: 600 } }, error),
-      Btn(t, { key: 6, variant: "accent", onClick: activate, disabled: checking || serial.replace(/-/g, "").length < 16, style: { width: "100%", justifyContent: "center", padding: "12px 0", fontSize: 14 } }, checking ? "확인 중..." : "인증하기"),
-      h("div", { key: 7, style: { fontSize: 11, color: t.muted, marginTop: 20, lineHeight: 1.6 } }, "일반 시리얼은 발급일로부터 30일간 사용 가능합니다.\n기간 만료 시 새 시리얼을 발급받아 다시 입력해주세요.\n문의사항은 공급처에 연락해주세요."),
+      error && h("div", { key: 5, style: { fontSize: DS.font.size.sm, color: t.red, marginBottom: DS.spacing.md + DS.spacing.sm, fontWeight: DS.font.weight.semibold } }, error),
+      Btn(t, { key: 6, variant: "accent", onClick: activate, disabled: checking || serial.replace(/-/g, "").length < 16, style: { width: "100%", justifyContent: "center", padding: `${DS.spacing.lg}px 0`, fontSize: DS.font.size.md } }, checking ? "확인 중..." : "인증하기"),
+      h("div", { key: 7, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xxl, lineHeight: 1.6 } }, "일반 시리얼은 발급일로부터 30일간 사용 가능합니다.\n기간 만료 시 새 시리얼을 발급받아 다시 입력해주세요.\n문의사항은 공급처에 연락해주세요."),
     ])
   );
 }
@@ -1839,39 +2047,44 @@ function App() {
 
   return h("div", { style: { display: "flex", height: "100vh", background: t.bg, fontFamily: FONT } }, [
     // 사이드바
-    h("div", { key: "side", style: { width: 224, background: t.surface, borderRight: `1px solid ${t.divider}`, padding: "20px 12px", display: "flex", flexDirection: "column" } }, [
-      h("div", { key: 1, style: { padding: "4px 10px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" } }, [
-        h("div", { key: 1 }, [
-          h("div", { key: 1, style: { fontSize: 16, fontWeight: 800, color: t.ink, letterSpacing: -0.3 } }, ["Signplus", h("span", { key: 1, style: { color: t.accent } }, "+")]),
-          h("div", { key: 2, style: { fontSize: 11.5, color: t.muted, marginTop: 2 } }, `통합 업무 툴 v${APP_VERSION}`),
+    // 사이드바 — 프리미엄 SaaS 스타일 (기능/메뉴/이벤트 동일, DS 토큰만 사용)
+    h("div", { key: "side", style: { width: 224, background: t.surface, borderRight: `1px solid ${t.divider}`, padding: `${DS.spacing.xxl}px ${DS.spacing.lg}px`, display: "flex", flexDirection: "column" } }, [
+      h("div", { key: 1, style: { padding: `${DS.spacing.xs}px ${DS.spacing.md}px ${DS.spacing.xl}px`, display: "flex", justifyContent: "space-between", alignItems: "flex-start" } }, [
+        h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: DS.spacing.md } }, [
+          h("div", { key: "mark", style: { width: 30, height: 30, borderRadius: DS.radius.md, background: t.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: DS.font.size.md, fontWeight: DS.font.weight.heavy, boxShadow: DS.shadow.sm, flexShrink: 0 } }, "S"),
+          h("div", { key: "word" }, [
+            h("div", { key: 1, style: { fontSize: DS.font.size.lg, fontWeight: DS.font.weight.heavy, color: t.ink, letterSpacing: -0.3 } }, ["Signplus", h("span", { key: 1, style: { color: t.accent } }, "+")]),
+            h("div", { key: 2, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xs } }, `통합 업무 툴 v${APP_VERSION}`),
+          ]),
         ]),
-        h("button", { key: 2, onClick: toggleMode, title: "테마 전환", style: { background: t.surface2, border: `1px solid ${t.divider}`, borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: t.ink, display: "flex", alignItems: "center", justifyContent: "center" } }, mode === "light" ? Ico.moon({ size: 15 }) : Ico.sun({ size: 15 })),
+        h("button", { key: 2, onClick: toggleMode, title: "테마 전환", style: { background: t.surface2, border: `1px solid ${t.divider}`, borderRadius: DS.radius.sm, width: 30, height: 30, cursor: "pointer", color: t.ink, display: "flex", alignItems: "center", justifyContent: "center" } }, mode === "light" ? Ico.moon({ size: 15 }) : Ico.sun({ size: 15 })),
       ]),
-      h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: 2, flex: 1 } }, NAV.map((n) => {
+      h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: DS.spacing.xs, flex: 1 } }, NAV.map((n) => {
         const active = tab === n.id;
-        return h("button", { key: n.id, onClick: () => setTab(n.id), style: { display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 10, border: "none", cursor: "pointer", background: active ? t.accentSoft : "transparent", color: active ? t.accent : t.ink, fontSize: 13.5, fontWeight: active ? 700 : 500, fontFamily: FONT, textAlign: "left" } }, [
+        return h("button", { key: n.id, onClick: () => setTab(n.id), style: { position: "relative", display: "flex", alignItems: "center", gap: DS.spacing.lg, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, border: "none", cursor: "pointer", background: active ? t.accentSoft : "transparent", color: active ? t.accent : t.ink, fontSize: DS.font.size.base, fontWeight: active ? DS.font.weight.bold : DS.font.weight.medium, fontFamily: FONT, textAlign: "left", boxShadow: active ? DS.shadow.sm : "none" } }, [
+          active && h("span", { key: "accent-bar", style: { position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: DS.spacing.xs, height: DS.spacing.xl, borderRadius: DS.radius.pill, background: t.accent } }),
           n.icon({ size: 16 }),
           h("span", { key: 2, style: { flex: 1 } }, n.label),
-          active && h("span", { key: 3, style: { width: 6, height: 6, borderRadius: 99, background: t.accent, boxShadow: `0 0 6px ${t.accent}` } }),
+          active && h("span", { key: 3, style: { width: DS.spacing.sm, height: DS.spacing.sm, borderRadius: DS.radius.pill, background: t.accent, boxShadow: `0 0 6px ${t.accent}` } }),
         ]);
       })),
       // 회사정보 설정 버튼
-      h("button", { key: 3, onClick: () => setCompanyOpen(true), style: { display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderRadius: 10, border: `1px solid ${t.divider}`, cursor: "pointer", background: "transparent", color: t.muted, fontSize: 12.5, fontWeight: 600, fontFamily: FONT, marginBottom: 6 } }, [h("span", { key: 1, style: { display: "inline-flex" } }, Ico.edit({ size: 14 })), h("span", { key: 2 }, " 회사 정보 설정")]),
+      h("button", { key: 3, onClick: () => setCompanyOpen(true), style: { display: "flex", alignItems: "center", gap: DS.spacing.md, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, border: `1px solid ${t.divider}`, cursor: "pointer", background: t.surface2, color: t.muted, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, fontFamily: FONT, marginBottom: DS.spacing.sm } }, [h("span", { key: 1, style: { display: "inline-flex" } }, Ico.edit({ size: 14 })), h("span", { key: 2 }, " 회사 정보 설정")]),
       // 데이터 백업/복원 버튼
-      h("div", { key: 4, style: { display: "flex", gap: 6 } }, [
-        h("button", { key: 1, onClick: handleBackupExport, title: "지금까지 저장된 견적·시안의뢰서·거래처·단가 전부를 파일 하나로 내보냅니다.", style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 6px", borderRadius: 10, border: `1px solid ${t.divider}`, cursor: "pointer", background: "transparent", color: t.muted, fontSize: 11.5, fontWeight: 600, fontFamily: FONT } }, [Ico.download({ size: 13 }), "백업"]),
-        h("button", { key: 2, onClick: handleBackupImport, title: "백업 파일을 불러와 데이터를 복원합니다. (재설치·새 컴퓨터 이전 시 사용)", style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 6px", borderRadius: 10, border: `1px solid ${t.divider}`, cursor: "pointer", background: "transparent", color: t.muted, fontSize: 11.5, fontWeight: 600, fontFamily: FONT } }, [Ico.book({ size: 13 }), "복원"]),
+      h("div", { key: 4, style: { display: "flex", gap: DS.spacing.sm } }, [
+        h("button", { key: 1, onClick: handleBackupExport, title: "지금까지 저장된 견적·시안의뢰서·거래처·단가 전부를 파일 하나로 내보냅니다.", style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: DS.spacing.sm, padding: `${DS.spacing.md}px ${DS.spacing.sm}px`, borderRadius: DS.radius.md, border: `1px solid ${t.divider}`, cursor: "pointer", background: t.surface2, color: t.muted, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, fontFamily: FONT } }, [Ico.download({ size: 13 }), "백업"]),
+        h("button", { key: 2, onClick: handleBackupImport, title: "백업 파일을 불러와 데이터를 복원합니다. (재설치·새 컴퓨터 이전 시 사용)", style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: DS.spacing.sm, padding: `${DS.spacing.md}px ${DS.spacing.sm}px`, borderRadius: DS.radius.md, border: `1px solid ${t.divider}`, cursor: "pointer", background: t.surface2, color: t.muted, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, fontFamily: FONT } }, [Ico.book({ size: 13 }), "복원"]),
       ]),
-      backupMsg && h("div", { key: 5, style: { fontSize: 11, color: backupMsg.includes("실패") ? t.red : t.green, marginTop: 6, textAlign: "center", fontWeight: 600 } }, backupMsg),
-      license && license.activated && license.type === "customer" && typeof license.daysLeft === "number" && h("div", { key: 6, style: { marginTop: 8, padding: "8px 10px", borderRadius: 10, background: license.daysLeft <= 7 ? t.red + "18" : t.surface2, border: `1px solid ${license.daysLeft <= 7 ? t.red + "44" : t.divider}`, textAlign: "center" } }, [
-        h("div", { key: 1, style: { fontSize: 16, fontWeight: 800, color: license.daysLeft <= 7 ? t.red : t.accent, fontFamily: MONO } }, license.daysLeft <= 0 ? "만료됨" : `${license.daysLeft}일`),
-        h("div", { key: 2, style: { fontSize: 10.5, color: license.daysLeft <= 7 ? t.red : t.muted, marginTop: 2, fontWeight: 600 } }, license.daysLeft <= 0 ? "사용기간 만료 · 갱신 필요" : `사용기간 남음${license.daysLeft <= 7 ? " · 곧 갱신 필요" : ""}`),
-        license.expiresAt && h("div", { key: 3, style: { fontSize: 10, color: t.muted, marginTop: 4, fontFamily: MONO } }, `만료: ${String(license.expiresAt).slice(0, 10)}`),
+      backupMsg && h("div", { key: 5, style: { fontSize: DS.font.size.xs, color: backupMsg.includes("실패") ? t.red : t.green, marginTop: DS.spacing.sm, textAlign: "center", fontWeight: DS.font.weight.semibold } }, backupMsg),
+      license && license.activated && license.type === "customer" && typeof license.daysLeft === "number" && h("div", { key: 6, style: { marginTop: DS.spacing.md, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, background: license.daysLeft <= 7 ? t.red + "18" : t.surface2, border: `1px solid ${license.daysLeft <= 7 ? t.red + "44" : t.divider}`, textAlign: "center" } }, [
+        h("div", { key: 1, style: { fontSize: DS.font.size.lg, fontWeight: DS.font.weight.heavy, color: license.daysLeft <= 7 ? t.red : t.accent, fontFamily: MONO } }, license.daysLeft <= 0 ? "만료됨" : `${license.daysLeft}일`),
+        h("div", { key: 2, style: { fontSize: DS.font.size.xs, color: license.daysLeft <= 7 ? t.red : t.muted, marginTop: DS.spacing.xs, fontWeight: DS.font.weight.semibold } }, license.daysLeft <= 0 ? "사용기간 만료 · 갱신 필요" : `사용기간 남음${license.daysLeft <= 7 ? " · 곧 갱신 필요" : ""}`),
+        license.expiresAt && h("div", { key: 3, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xs, fontFamily: MONO } }, `만료: ${String(license.expiresAt).slice(0, 10)}`),
       ]),
-      license && license.activated && license.type === "admin" && h("div", { key: 6, style: { marginTop: 8, padding: "6px 10px", borderRadius: 10, background: t.surface2, textAlign: "center", fontSize: 10.5, color: t.muted } }, "관리자 라이선스 (무제한)"),
+      license && license.activated && license.type === "admin" && h("div", { key: 6, style: { marginTop: DS.spacing.md, padding: `${DS.spacing.sm}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, background: t.surface2, textAlign: "center", fontSize: DS.font.size.xs, color: t.muted } }, "관리자 라이선스 (무제한)"),
     ]),
     // 콘텐츠
-    h("div", { key: "main", style: { flex: 1, padding: 28, overflowY: "auto" } }, [
+    h("div", { key: "main", style: { flex: 1, padding: DS.spacing.xxxl + DS.spacing.xs, overflowY: "auto" } }, [
       tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, presetLabel, vendors, loadVendorPresets }),
       tab === "brief" && h(DesignBrief, { key: "b", theme: t }),
       tab === "led" && h(LedCalculator, { key: "l", theme: t }),
@@ -1891,24 +2104,24 @@ function CompanyModalInner(props) {
   const [c, setC] = useState(props.company);
   const set = (k) => (e) => setC((p) => ({ ...p, [k]: e.target.value }));
   return h("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }, onClick: props.onClose }, [
-    h("div", { key: 1, onClick: (e) => e.stopPropagation(), style: { background: t.surface, borderRadius: 16, padding: 24, width: 500, maxHeight: "88vh", overflowY: "auto", border: `1px solid ${t.divider}` } }, [
-      h("div", { key: 1, style: { fontSize: 17, fontWeight: 700, color: t.ink, marginBottom: 4 } }, "공급자 (회사) 정보"),
-      h("div", { key: 2, style: { fontSize: 12.5, color: t.muted, marginBottom: 16 } }, "견적서 PDF 우측 상단·하단·작성자란에 표시됩니다."),
-      h("div", { key: 3, style: { display: "flex", flexDirection: "column", gap: 12 } }, [
-        h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 120px", gap: 12 } }, [
+    h("div", { key: 1, onClick: (e) => e.stopPropagation(), style: { background: t.surface, borderRadius: DS.radius.lg, padding: DS.spacing.xxxl, width: 500, maxHeight: "88vh", overflowY: "auto", border: `1px solid ${t.divider}` } }, [
+      h("div", { key: 1, style: { fontSize: DS.font.size.lg, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "공급자 (회사) 정보"),
+      h("div", { key: 2, style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.xl } }, "견적서 PDF 우측 상단·하단·작성자란에 표시됩니다."),
+      h("div", { key: 3, style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
+        h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 120px", gap: DS.spacing.lg } }, [
           Field(t, "상호", TextInput(t, { value: c.name, onChange: set("name"), placeholder: "싸인플러스 (SIGNPLUS)" })),
           Field(t, "대표자", TextInput(t, { value: c.ceo, onChange: set("ceo"), placeholder: "홍길동" })),
         ]),
         Field(t, "사업자등록번호", TextInput(t, { value: c.biznum, onChange: set("biznum"), placeholder: "123-45-67890" })),
         Field(t, "주소", TextInput(t, { value: c.addr, onChange: set("addr"), placeholder: "강원특별자치도 춘천시 ○○로 123" })),
-        h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } }, [
+        h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
           Field(t, "TEL", TextInput(t, { value: c.tel, onChange: set("tel"), placeholder: "033-123-4567" })),
           Field(t, "FAX", TextInput(t, { value: c.fax, onChange: set("fax"), placeholder: "033-123-4568" })),
         ]),
         Field(t, "E-mail", TextInput(t, { value: c.email, onChange: set("email"), placeholder: "signplus@naver.com" })),
       ]),
-      h("div", { key: 4, style: { fontSize: 11, color: t.muted, marginTop: 12, lineHeight: 1.6 } }, "※ 로고·도장 이미지는 견적 계산기 화면에서 등록합니다. 로고를 등록하지 않으면 'SIGNPLUS+' 텍스트 로고가 표시됩니다."),
-      h("div", { key: 5, style: { display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" } }, [
+      h("div", { key: 4, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.lg, lineHeight: 1.6 } }, "※ 로고·도장 이미지는 견적 계산기 화면에서 등록합니다. 로고를 등록하지 않으면 'SIGNPLUS+' 텍스트 로고가 표시됩니다."),
+      h("div", { key: 5, style: { display: "flex", gap: DS.spacing.md, marginTop: DS.spacing.xxl, justifyContent: "flex-end" } }, [
         Btn(t, { key: 1, variant: "ghost", onClick: props.onClose }, "취소"),
         Btn(t, { key: 2, variant: "accent", onClick: () => { props.onSave(c); props.onClose(); } }, "저장"),
       ]),

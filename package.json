@@ -1,6 +1,6 @@
 {
   "name": "signplus-suite",
-  "version": "3.6.0",
+  "version": "3.7.0",
   "description": "Signplus+ 통합 업무 툴 - 견적/시안의뢰서/LED계산기/대시보드/거래처·단가 DB",
   "main": "main.js",
   "author": "Signplus+",
@@ -15,6 +15,7 @@
     "electron-builder": "^24.13.3"
   },
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
     "exceljs": "^4.4.0"
   },
   "build": {
@@ -29,7 +30,13 @@
       "index.html",
       "renderer/**/*",
       "vendor/**/*",
-      "node_modules/exceljs/**/*"
+      "node_modules/exceljs/**/*",
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/bindings/**/*",
+      "node_modules/file-uri-to-path/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
     ],
     "win": {
       "target": "nsis"
