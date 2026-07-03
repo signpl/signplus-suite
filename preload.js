@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld("api", {
 contextBridge.exposeInMainWorld("license", {
   status: () => ipcRenderer.invoke("license-status"),
   activate: (serial) => ipcRenderer.invoke("license-activate", serial),
+  reset: () => ipcRenderer.invoke("license-reset"),
 });
 
 contextBridge.exposeInMainWorld("backup", {

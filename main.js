@@ -19,7 +19,7 @@ ipcMain.handle("license-status", async () => {
     if (!data || !data.serial) return { activated: false };
     const check = checkSerial(data.serial);
     if (!check.valid || check.expired) return { activated: false, expired: !!check.expired, type: check.type };
-    return { activated: true, serial: data.serial, type: check.type, daysLeft: check.daysLeft, expiresAt: check.expiresAt };
+    return { activated: true, serial: data.serial, type: check.type, daysLeft: check.daysLeft, expiresAt: check.expiresAt, issuedAt: check.issuedAt };
   } catch {
     return { activated: false };
   }
@@ -31,6 +31,16 @@ ipcMain.handle("license-activate", async (_e, serial) => {
     if (check.expired) return { ok: false, error: `이 시리얼은 이미 만료되었습니다 (발급일로부터 30일 경과). 새 시리얼을 발급받아 입력해주세요.` };
     fs.writeFileSync(licenseFile(), JSON.stringify({ serial: String(serial).trim().toUpperCase(), activatedAt: new Date().toISOString() }, null, 2), "utf-8");
     return { ok: true, type: check.type, daysLeft: check.daysLeft };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+});
+/* 관리자 라이선스 패널의 "라이선스 초기화/로그아웃"에서 사용 — 검증 로직은 그대로, 저장된 활성화 파일만 지운다 */
+ipcMain.handle("license-reset", async () => {
+  try {
+    const file = licenseFile();
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+    return { ok: true };
   } catch (err) {
     return { ok: false, error: String((err && err.message) || err) };
   }
