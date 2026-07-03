@@ -124,8 +124,13 @@ async function saveKey(key, value) {
 /* ------------------------------------------------------------------ */
 /* 단가 기본값: 제일에코 데이터(jeil-presets.js에서 로드). 없으면 빈 배열 */
 const MATERIAL_PRESETS = (typeof JEIL_PRESETS !== "undefined" ? JEIL_PRESETS : []);
-/* 단가표 카테고리 순서 */
+/* 단가표 카테고리 순서 — 공식 명칭은 "포마트"이다 */
 const PRESET_CATS = ["채널", "채널바", "고무스카시", "LED", "현수막", "포마트", "코팅지/원단", "합성지/PVC/베너", "시트출력", "원단출력", "프레임", "에어간판", "어닝", "시공/경비"];
+
+// 과거 오탈자("포맥트") 하위호환 — 저장된 데이터는 건드리지 않고 화면 표시·필터링 시에만
+// 공식 명칭("포마트")으로 보정한다. 새 오탈자가 발견되면 이 맵에 한 줄만 추가하면 된다.
+const CATEGORY_ALIASES = { "포맥트": "포마트" };
+const normalizeCategoryLabel = (cat) => CATEGORY_ALIASES[cat] || cat;
 
 /* ==================================================================== */
 /*  아이콘 (인라인 SVG)                                                   */
@@ -681,7 +686,7 @@ function QuoteCalculator(props) {
         const activeCats = pCat === "전체" ? cats : [pCat];
         body = h("div", { key: "acc", style: { display: "flex", flexDirection: "column", gap: DS.spacing.sm, maxHeight: 440, overflowY: "auto", paddingRight: DS.spacing.xs } },
           activeCats.map((cat) => {
-            const catItems = vendorPresets.filter((p) => (p.cat || "") === cat);
+            const catItems = vendorPresets.filter((p) => normalizeCategoryLabel(p.cat || "") === cat);
             if (catItems.length === 0) return null;
             const subs = [...new Set(catItems.map((p) => p.sub || "기타"))];
             return h("div", { key: cat, style: { border: `1px solid ${t.divider}`, borderRadius: DS.radius.md, overflow: "hidden", flexShrink: 0 } }, [
@@ -807,9 +812,9 @@ function QuoteCalculator(props) {
     // 채널 LED 자동계산 도우미
     Card(t, { key: "led-helper", style: { background: t.surface2, border: `1px dashed ${t.divider}` } }, (() => {
       const LED_PER_SIZE = { 300: 3, 400: 5, 500: 7, 600: 9, 700: 12, 800: 15, 900: 18, 1000: 22 }; // 각수별 3구 모듈 개수 (근사치)
-      const [chSize, setChSize] = useState("700");
-      const [chQty, setChQty] = useState("3");
-      const [withAssembly, setWithAssembly] = useState(true);
+      const [chSize, setChSize] = useState(""); // 글자 각수(mm) — 새 계산기를 열 때는 비워둠(계산 시 700 기본값 적용, 아래 sizeNum 참고)
+      const [chQty, setChQty] = useState("1"); // 글자 수량 기본값
+      const [withAssembly, setWithAssembly] = useState(true); // LED 조립 포함 기본 체크
       const ledModulePrice = 180; // 3구 2835 1W 기본 단가
       const assemblyPricePerModule = 350; // 조립비 (개당)
       const sizeNum = Number(chSize) || 700;
@@ -836,6 +841,10 @@ function QuoteCalculator(props) {
         }
         setItems((p) => [...p.filter((i) => i.name || i.unitPrice), ...newItems]);
         flash(`LED 모듈 ${totalModules}개${withAssembly ? " + 조립비" : ""} 추가됨`);
+        // 다음 입력을 위해 기본값으로 리셋 — 글자 수량=1, LED 조립 포함=체크 유지, 글자 각수만 비움
+        setChQty("1");
+        setChSize("");
+        setWithAssembly(true);
       };
 
       return [
@@ -1420,7 +1429,7 @@ function DatabaseManager(props) {
   // 필터링
   const cats = ["전체", ...PRESET_CATS];
   const filtered = presets.filter((p) => {
-    if (catFilter !== "전체" && (p.cat || "") !== catFilter) return false;
+    if (catFilter !== "전체" && normalizeCategoryLabel(p.cat || "") !== catFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!((p.name || "") + (p.sub || "") + (p.spec || "") + (p.memo || "")).toLowerCase().includes(q)) return false;
@@ -1497,13 +1506,14 @@ function DatabaseManager(props) {
               const rows = [];
               let lastGroup = null;
               filtered.forEach((c) => {
-                const groupKey = (c.cat || "") + "|" + (c.sub || "");
+                const catLabel = normalizeCategoryLabel(c.cat || "");
+                const groupKey = catLabel + "|" + (c.sub || "");
                 if (groupKey !== lastGroup) {
                   lastGroup = groupKey;
-                  rows.push(h("tr", { key: "g-" + groupKey }, h("td", { colSpan: 8, style: { padding: `${DS.spacing.md}px ${DS.spacing.md}px ${DS.spacing.xs}px`, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.bold, color: t.accent, borderTop: `2px solid ${t.divider}` } }, `${c.cat || ""}${c.sub ? " / " + c.sub : ""}`)));
+                  rows.push(h("tr", { key: "g-" + groupKey }, h("td", { colSpan: 8, style: { padding: `${DS.spacing.md}px ${DS.spacing.md}px ${DS.spacing.xs}px`, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.bold, color: t.accent, borderTop: `2px solid ${t.divider}` } }, `${catLabel}${c.sub ? " / " + c.sub : ""}`)));
                 }
                 rows.push(h("tr", { key: c.id, style: { borderTop: `1px solid ${t.divider}` } }, [
-                  h("td", { key: 1, style: { padding: DS.spacing.xs } }, Sel(t, { value: c.cat || "채널", onChange: (e) => updPreset(c.id, "cat", e.target.value) }, PRESET_CATS)),
+                  h("td", { key: 1, style: { padding: DS.spacing.xs } }, Sel(t, { value: catLabel || "채널", onChange: (e) => updPreset(c.id, "cat", e.target.value) }, PRESET_CATS)),
                   h("td", { key: 2, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.sub || "", onChange: (e) => updPreset(c.id, "sub", e.target.value), placeholder: "중분류" })),
                   h("td", { key: 3, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.name || "", onChange: (e) => updPreset(c.id, "name", e.target.value), placeholder: "품목명" })),
                   h("td", { key: 4, style: { padding: DS.spacing.xs } }, TextInput(t, { value: c.spec || "", onChange: (e) => updPreset(c.id, "spec", e.target.value), placeholder: "규격", style: { fontFamily: MONO } })),
