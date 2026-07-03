@@ -66,7 +66,49 @@ const THEMES = {
     inkPanelMuted: "#98989F",
     inkPanelBorder: "#38383C",
   },
+  orange: {
+    bg: "#FFF8F3",
+    surface: "#FFFFFF",
+    surface2: "#FFF1E8",
+    ink: "#2B1B0F",
+    muted: "#9A7A5C",
+    divider: "#F0DCC9",
+    accent: "#FF6B35",
+    accentSoft: "#FFE4D1",
+    green: "#2FA84F",
+    greenSoft: "#E9F7ED",
+    blue: "#0071E3",
+    blueSoft: "#EAF3FE",
+    purple: "#AF52DE",
+    red: "#E0453C",
+    inkPanel: "#2B1B0F",
+    inkPanelText: "#FFE9D9",
+    inkPanelMuted: "#D9B896",
+    inkPanelBorder: "#5C3D22",
+  },
+  blue: {
+    bg: "#F2F7FF",
+    surface: "#FFFFFF",
+    surface2: "#EAF2FF",
+    ink: "#0B1F3A",
+    muted: "#6B84A6",
+    divider: "#D6E4F7",
+    accent: "#0071E3",
+    accentSoft: "#DCEBFF",
+    green: "#2FA84F",
+    greenSoft: "#E9F7ED",
+    blue: "#0071E3",
+    blueSoft: "#EAF3FE",
+    purple: "#AF52DE",
+    red: "#E0453C",
+    inkPanel: "#0B1F3A",
+    inkPanelText: "#E5EEFB",
+    inkPanelMuted: "#9CB3D1",
+    inkPanelBorder: "#1E3A5F",
+  },
 };
+const THEME_IDS = ["light", "dark", "orange", "blue"];
+const THEME_LABELS = { light: "Light", dark: "Dark", orange: "Orange", blue: "Blue" };
 const FONT = `-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", sans-serif`;
 const MONO = `ui-monospace, "SF Mono", Menlo, Consolas, monospace`;
 const APP_VERSION = (typeof window !== "undefined" && (window.__APP_VERSION__ || (window.appInfo && window.appInfo.version))) || "?";
@@ -481,7 +523,6 @@ function buildBriefHTML(data) {
     table.items th { background:#F3F3F3; font-size:10.5px; padding:8px 6px; border:1px solid #DDD; }
     table.items td { font-size:10.5px; padding:7px 6px; border:1px solid #EEE; text-align:center; }
     table.items td.small { font-size:9.5px; text-align:left; }
-    .swatch { display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:middle; margin-right:6px; border:1px solid #ccc; }
     .note { font-size:10.5px; color:#333; white-space:pre-wrap; line-height:1.7; background:#FAFAFA; border:1px solid #EEE; border-radius:6px; padding:10px 12px; }
     .imgsec { margin-top:14px; }
     .imgtitle { font-size:11px; font-weight:700; color:#555; margin-bottom:8px; }
@@ -500,7 +541,6 @@ function buildBriefHTML(data) {
 
     <div class="section-title">디자인 방향</div>
     <table class="meta-tbl">
-      <tr><td class="k">테마</td><td><span class="swatch" style="background:${esc(f.brandColor)}"></span>${esc(f.brandColor)}</td></tr>
       <tr><td class="k">견적서 스타일</td><td>${esc(f.fontMood)}</td></tr>
     </table>
 
@@ -944,14 +984,13 @@ function QuoteCalculator(props) {
 /*  2. 시안 의뢰서 생성기                                                  */
 /* ==================================================================== */
 const SIGN_TYPES = ["채널간판 (전면발광)", "채널간판 (후면발광)", "플렉스 간판", "갈바 레이저 타공 간판", "아크릴 간판", "스테인리스 입체 간판", "LED 미디어월", "현수막 / 배너"];
-const FONT_MOODS = ["모던 산세리프", "클래식 세리프", "캘리그라피 / 손글씨", "고딕 볼드", "미니멀 라이트"];
-
-const SIGNPLUS_THEME_COLOR = "#FF6B35"; // 기본 테마("Signplus+") 색상 — PDF 브랜드 표기에 쓰는 색과 동일
+// 시안 의뢰서 "견적서 스타일" 선택지 — 향후 PDF 템플릿 종류로 쓰일 예정(현재는 값만 저장/표시).
+const FONT_MOODS = ["기본형", "심플형", "프리미엄형", "공공기관", "기업형"];
 
 function DesignBrief(props) {
   const t = props.theme;
   const companyName = (props.company && props.company.name) || "Signplus+"; // 회사 정보 미설정 시 기본값
-  const emptyForm = { client: "", industry: "", location: "", brandColor: SIGNPLUS_THEME_COLOR, fontMood: FONT_MOODS[0], installNote: "" };
+  const emptyForm = { client: "", industry: "", location: "", fontMood: FONT_MOODS[0], installNote: "" };
   const emptySignItem = () => ({ id: uid(), signType: SIGN_TYPES[0], width: "", height: "", location: "", dayEffect: "", nightEffect: "" });
   const [f, setF] = useState(emptyForm);
   const [signItems, setSignItems] = useState([emptySignItem()]);
@@ -966,14 +1005,12 @@ function DesignBrief(props) {
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), m && m.includes("실패") ? 6000 : 2200); };
 
   useEffect(() => { loadKey("sp2-briefs", []).then((v) => { setSaved(v); setLoaded(true); }); }, []);
-  // 설정(출력설정 > 시안 의뢰서 기본값)에서 지정한 기본 테마/견적서 스타일을 반영한다 — 사용자가 이미
+  // 설정(출력설정 > 시안 의뢰서 기본값)에서 지정한 기본 견적서 스타일을 반영한다 — 사용자가 이미
   // 값을 바꿨으면(하드코딩된 기본값과 다르면) 덮어쓰지 않고, 저장된 기존 의뢰서는 전혀 건드리지 않는다.
   useEffect(() => {
     loadKey("sp2-brief-defaults", null).then((d) => {
       if (!d) return;
-      setF((prev) => (prev.brandColor === SIGNPLUS_THEME_COLOR && prev.fontMood === FONT_MOODS[0]
-        ? { ...prev, brandColor: d.theme || prev.brandColor, fontMood: d.style || prev.fontMood }
-        : prev));
+      setF((prev) => (prev.fontMood === FONT_MOODS[0] ? { ...prev, fontMood: d.style || prev.fontMood } : prev));
     });
   }, []);
 
@@ -1020,7 +1057,6 @@ function DesignBrief(props) {
 ■ 건물/설치 위치 : ${f.location || "-"}
 
 [디자인 방향]
-- 테마 : ${f.brandColor}
 - 견적서 스타일 : ${f.fontMood}
 
 [간판 제작 항목] (총 ${signItems.length}건)
@@ -1070,18 +1106,11 @@ ${images.length ? `\n[첨부 이미지] ${images.length}장 (앱에 저장됨)` 
     h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.xl } }, [
       Card(t, { key: 1, style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
         h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
-          Field(t, "거래처", TextInput(t, { value: f.client, onChange: set("client"), placeholder: "예: Signplus+" })),
-          Field(t, "업종", TextInput(t, { value: f.industry, onChange: set("industry"), placeholder: "예: 음식점" })),
+          Field(t, "거래처", TextInput(t, { value: f.client, onChange: set("client"), placeholder: "거래처명을 입력하세요" })),
+          Field(t, "업종", TextInput(t, { value: f.industry, onChange: set("industry"), placeholder: "업종을 입력하세요" })),
         ]),
         Field(t, "건물 / 설치 위치", TextInput(t, { value: f.location, onChange: set("location"), placeholder: "예: 건물 정면 파사드 전체" })),
-        h("div", { key: 5, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
-          Field(t, "테마", h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center" } }, [
-            h("input", { key: 1, type: "color", value: f.brandColor, onChange: set("brandColor"), style: { width: 40, height: 36, border: `1px solid ${t.divider}`, borderRadius: DS.radius.sm, padding: 0, background: "none" } }),
-            TextInput(t, { value: f.brandColor, onChange: set("brandColor"), style: { flex: 1, fontFamily: MONO } }),
-            Btn(t, { key: 3, variant: "ghost", title: "기본 테마(Signplus+)로 재설정", onClick: () => setF((p) => ({ ...p, brandColor: SIGNPLUS_THEME_COLOR })), style: { whiteSpace: "nowrap", padding: `${DS.spacing.sm}px ${DS.spacing.md}px`, fontSize: DS.font.size.xs } }, "Signplus+"),
-          ])),
-          Field(t, "견적서 스타일", Sel(t, { value: f.fontMood, onChange: set("fontMood") }, FONT_MOODS)),
-        ]),
+        Field(t, "견적서 스타일", h("div", { style: { maxWidth: 280 } }, Sel(t, { value: f.fontMood, onChange: set("fontMood") }, FONT_MOODS))),
         Field(t, "시공 참고사항", TextArea(t, { value: f.installNote, onChange: set("installNote"), rows: 3, placeholder: "여백, 고정 방식, 하지 작업 등" })),
         // 이미지 첨부
         Field(t, "현장 사진 · 참고 이미지", h("div", {}, [
@@ -2322,7 +2351,7 @@ function SettingsPage(props) {
 
   let content;
   if (section === "company") content = h(SettingsCompanySection, { theme: t, company: props.company, onSaveCompany: props.onSaveCompany });
-  else if (section === "output") content = h(SettingsOutputSection, { theme: t });
+  else if (section === "output") content = h(SettingsOutputSection, { theme: t, appTheme: props.appTheme, onChangeAppTheme: props.onChangeAppTheme });
   else if (section === "program") content = h(SettingsProgramSection, { theme: t, vendors: props.vendors });
   else if (section === "license") content = h(AdminLicensePanel, { theme: t, license: props.license, company: props.company, onActivated: props.onActivated, embedded: true });
 
@@ -2400,33 +2429,30 @@ function SettingsCompanySection(props) {
 function SettingsOutputSection(props) {
   const t = props.theme;
   const [pdfTheme, setPdfThemeState] = useState("classic");
-  const [briefTheme, setBriefTheme] = useState(SIGNPLUS_THEME_COLOR);
   const [briefStyle, setBriefStyle] = useState(FONT_MOODS[0]);
 
-  // 기존 QuoteCalculator/DesignBrief가 쓰는 저장 키(sp2-pdf-theme)를 그대로 읽고 쓴다.
-  // sp2-brief-defaults는 새 시안 의뢰서를 열 때 적용될 기본값으로, 기존에 저장된 의뢰서에는 영향 없다.
+  // 기존 QuoteCalculator가 쓰는 저장 키(sp2-pdf-theme)를 그대로 읽고 쓴다.
+  // sp2-brief-defaults는 새 시안 의뢰서를 열 때 적용될 기본 스타일로, 기존에 저장된 의뢰서에는 영향 없다.
   useEffect(() => {
     loadKey("sp2-pdf-theme", "classic").then(setPdfThemeState);
     loadKey("sp2-brief-defaults", null).then((d) => {
-      if (d) { setBriefTheme(d.theme || SIGNPLUS_THEME_COLOR); setBriefStyle(d.style || FONT_MOODS[0]); }
+      if (d) setBriefStyle(d.style || FONT_MOODS[0]);
     });
   }, []);
 
   const changePdfTheme = (v) => { setPdfThemeState(v); saveKey("sp2-pdf-theme", v); };
-  const changeBriefTheme = (v) => { setBriefTheme(v); saveKey("sp2-brief-defaults", { theme: v, style: briefStyle }); };
-  const changeBriefStyle = (v) => { setBriefStyle(v); saveKey("sp2-brief-defaults", { theme: briefTheme, style: v }); };
+  const changeBriefStyle = (v) => { setBriefStyle(v); saveKey("sp2-brief-defaults", { style: v }); };
 
   return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
+    Card(t, { key: "apptheme", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "테마"),
+      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.lg } }, "앱 전체 화면 테마입니다. 변경하면 즉시 전체 UI에 적용되고 자동으로 저장됩니다."),
+      h("div", { key: "field", style: { maxWidth: 280 } }, Field(t, "테마 선택", Sel(t, { value: props.appTheme, onChange: (e) => props.onChangeAppTheme(e.target.value) }, THEME_IDS.map((id) => ({ value: id, label: THEME_LABELS[id] }))))),
+    ]),
     Card(t, { key: "brief", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
       h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "시안 의뢰서 기본값"),
-      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.lg } }, "새로 여는 시안 의뢰서에 적용되는 기본 테마·견적서 스타일입니다. 이미 저장된 의뢰서는 그대로 유지됩니다."),
-      h("div", { key: "fields", style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg, maxWidth: 560 } }, [
-        Field(t, "테마", h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center" } }, [
-          h("input", { type: "color", value: briefTheme, onChange: (e) => changeBriefTheme(e.target.value), style: { width: 40, height: 36, border: `1px solid ${t.divider}`, borderRadius: DS.radius.sm, padding: 0, background: "none" } }),
-          TextInput(t, { value: briefTheme, onChange: (e) => changeBriefTheme(e.target.value), style: { flex: 1, fontFamily: MONO } }),
-        ])),
-        Field(t, "견적서 스타일", Sel(t, { value: briefStyle, onChange: (e) => changeBriefStyle(e.target.value) }, FONT_MOODS)),
-      ]),
+      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.lg } }, "새로 여는 시안 의뢰서에 적용되는 기본 견적서 스타일입니다. 이미 저장된 의뢰서는 그대로 유지됩니다. (향후 PDF 템플릿에 반영될 예정입니다.)"),
+      h("div", { key: "field", style: { maxWidth: 280 } }, Field(t, "견적서 스타일", Sel(t, { value: briefStyle, onChange: (e) => changeBriefStyle(e.target.value) }, FONT_MOODS))),
     ]),
     Card(t, { key: "pdf", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
       h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "PDF 옵션"),
@@ -2521,7 +2547,10 @@ function App() {
   }, []);
 
   const t = THEMES[mode];
-  const toggleMode = async () => { const nm = mode === "light" ? "dark" : "light"; setMode(nm); await saveKey("sp2-theme", nm); };
+  // 사이드바 아이콘 클릭 = 빠른 전환(Light→Dark→Orange→Blue 순환), 설정 페이지의 "테마" 드롭다운 =
+  // 직접 선택. 둘 다 같은 mode 상태/같은 sp2-theme 키를 공유하므로 항상 즉시·동시에 전체 UI에 반영된다.
+  const changeTheme = async (nm) => { setMode(nm); await saveKey("sp2-theme", nm); };
+  const cycleTheme = () => { const idx = THEME_IDS.indexOf(mode); changeTheme(THEME_IDS[(idx + 1) % THEME_IDS.length] || "light"); };
   const changePresets = (next) => setPresets(next);
   const changePresetLabel = async (v) => { const val = (v || "").trim() || "제일에코"; setPresetLabel(val); await saveKey("sp2-preset-label", val); };
   const saveCompany = async (c) => { setCompany(c); await saveKey("sp2-company", c); };
@@ -2597,7 +2626,7 @@ function App() {
             h("div", { key: 2, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xs } }, `통합 업무 툴 v${APP_VERSION}`),
           ]),
         ]),
-        h("button", { key: 2, onClick: toggleMode, title: "테마 전환", style: { background: t.surface2, border: `1px solid ${t.divider}`, borderRadius: DS.radius.sm, width: 30, height: 30, cursor: "pointer", color: t.ink, display: "flex", alignItems: "center", justifyContent: "center" } }, mode === "light" ? Ico.moon({ size: 15 }) : Ico.sun({ size: 15 })),
+        h("button", { key: 2, onClick: cycleTheme, title: `테마 전환 (현재: ${THEME_LABELS[mode] || mode})`, style: { background: t.surface2, border: `1px solid ${t.divider}`, borderRadius: DS.radius.sm, width: 30, height: 30, cursor: "pointer", color: t.ink, display: "flex", alignItems: "center", justifyContent: "center" } }, mode === "light" ? Ico.moon({ size: 15 }) : Ico.sun({ size: 15 })),
       ]),
       h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: DS.spacing.xs, flex: 1 } }, NAV.map((n) => {
         const active = tab === n.id;
@@ -2655,7 +2684,7 @@ function App() {
       tab === "led" && h(LedCalculator, { key: "l", theme: t }),
       tab === "dashboard" && h(ProjectDashboard, { key: "d", theme: t, onOpenQuote: openQuoteInCalculator }),
       tab === "db" && h(DatabaseManager, { key: "db", theme: t, presets, onPresetsChange: changePresets, presetLabel, onPresetLabelChange: changePresetLabel, vendors, onAddVendor: addVendor, onRemoveVendor: removeVendor, loadVendorPresets, saveVendorPresets }),
-      tab === "settings" && h(SettingsPage, { key: "settings", theme: t, initialSection: settingsSection, company, onSaveCompany: saveCompany, vendors, license, onActivated: checkLicense }),
+      tab === "settings" && h(SettingsPage, { key: "settings", theme: t, initialSection: settingsSection, company, onSaveCompany: saveCompany, vendors, license, onActivated: checkLicense, appTheme: mode, onChangeAppTheme: changeTheme }),
     ]),
   ]);
 }
