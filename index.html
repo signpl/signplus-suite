@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;" />
+  <title>Signplus Suite</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #F5F5F7; height: 100%; overflow: hidden; }
+    #root { height: 100vh; }
+    * { box-sizing: border-box; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    input, select, textarea, button { font-family: inherit; }
+    input:focus, select:focus, textarea:focus { border-color: #FF6B35 !important; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="./vendor/react.production.min.js"></script>
+  <script src="./vendor/react-dom.production.min.js"></script>
+  <script src="./renderer/jeil-presets.js"></script>
+  <script src="./renderer/version.js"></script>
+  <script src="./renderer/app.js"></script>
+</body>
+</html>

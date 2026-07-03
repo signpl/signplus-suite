@@ -1,0 +1,44 @@
+{
+  "name": "signplus-suite",
+  "version": "3.6.0",
+  "description": "Signplus+ 통합 업무 툴 - 견적/시안의뢰서/LED계산기/대시보드/거래처·단가 DB",
+  "main": "main.js",
+  "author": "Signplus+",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^30.0.9",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  },
+  "build": {
+    "appId": "com.signplus.suite",
+    "productName": "Signplus Suite",
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "license-common.js",
+      "package.json",
+      "index.html",
+      "renderer/**/*",
+      "vendor/**/*",
+      "node_modules/exceljs/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Signplus Suite"
+    }
+  }
+}
