@@ -108,7 +108,7 @@ Because `storage.set` in different components doesn't share React state, cross-c
 ## TODO Policy
 
 - 새로운 기능 요청은 바로 구현하지 않는다.
-- 반드시 `docs/02_TODO.md`에 등록한 후, 우선순위를 정해서 Sprint 단위로 개발한다.
+- 반드시 `docs/03_TODO.md`에 등록한 후, 우선순위를 정해서 Sprint 단위로 개발한다.
 
 ## Documentation Files
 
@@ -116,15 +116,13 @@ Because `storage.set` in different components doesn't share React state, cross-c
 - `CLAUDE.md` — 개발 규칙 (Claude Code가 자동으로 읽는 파일이라 루트에 고정 — `docs/`로 옮기지 않음)
 - `IDEAS.md` — 아이디어 저장소
 - `docs/00_PROJECT_VISION.md` — 장기 비전/철학 (가장 중요)
-- `docs/01_ROADMAP.md` — 로드맵
-- `docs/02_TODO.md` — 다음 Sprint 작업
-- `docs/03_CHANGELOG.md` — 개발 변경 이력
-- `docs/04_RELEASE_NOTES.md` — 사용자 업데이트 내역
-- `docs/05_CLOUD_ARCHITECTURE.md` — 클라우드 대응 아키텍처
-- `docs/06_BUSINESS_MODEL.md` — 비즈니스 모델
-- `docs/07_API.md` — API 문서
-- `docs/08_DATABASE.md` — 데이터베이스 문서
-- `docs/09_UI_GUIDELINES.md` — UI 가이드라인
+- `docs/01_ARCHITECTURE.md` — 아키텍처(현재 구조 + Cloud-Ready 방향)
+- `docs/02_ROADMAP.md` — 단계별 로드맵
+- `docs/03_TODO.md` — 다음 Sprint 작업
+- `docs/04_CHANGELOG.md` — 개발 변경 이력
+- `docs/05_RELEASE_NOTES.md` — 사용자 업데이트 내역
+
+문서는 실제로 채워진 것만 유지한다 — 내용 없는 placeholder 문서는 만들지 않는다.
 
 ## Investigation
 
