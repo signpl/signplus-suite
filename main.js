@@ -35,6 +35,15 @@ ipcMain.handle("license-reset", async () => {
   }
 });
 
+/* 설정 페이지 "저장 위치" 표시용 — 기존 getStorageDir()을 그대로 노출만 한다 */
+ipcMain.handle("get-storage-dir", async () => {
+  try {
+    return getStorageDir();
+  } catch {
+    return null;
+  }
+});
+
 /* ------------------------------------------------------------------ */
 /*  로컬 저장소 — SQLite(key-value) 기반. 이전 버전의 키별 JSON 파일이         */
 /*  남아있으면 최초 실행 시 kv 테이블로 1회 이전한다.                          */

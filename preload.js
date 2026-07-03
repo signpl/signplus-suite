@@ -34,3 +34,7 @@ contextBridge.exposeInMainWorld("backup", {
   export: () => ipcRenderer.invoke("backup-export"),
   import: () => ipcRenderer.invoke("backup-import"),
 });
+
+contextBridge.exposeInMainWorld("system", {
+  getStorageDir: () => ipcRenderer.invoke("get-storage-dir"),
+});

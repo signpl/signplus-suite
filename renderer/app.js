@@ -573,6 +573,16 @@ function QuoteCalculator(props) {
     return () => window.removeEventListener("sp-storage-changed", onProjectsChanged);
   }, []);
   useEffect(() => { setVendorPresets(presets); }, [presets]); // 기본 거래처 단가 동기화
+  // 설정(프로그램설정 > 기본 거래처)에서 "jeil"이 아닌 다른 거래처를 기본으로 지정했으면 그 거래처로
+  // 시작한다 — 지정하지 않았거나 목록에 없으면 기존과 동일하게 "jeil"을 그대로 사용한다(동작 변경 없음).
+  useEffect(() => {
+    loadKey("sp2-default-vendor", "jeil").then(async (vid) => {
+      if (vid && vid !== "jeil" && props.vendors && props.vendors.some((v) => v.id === vid)) {
+        setSelectedVendor(vid);
+        setVendorPresets(await props.loadVendorPresets(vid));
+      }
+    });
+  }, []);
   const changePdfTheme = (v) => { setPdfTheme(v); saveKey("sp2-pdf-theme", v); };
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), m && m.includes("실패") ? 6000 : 2200); };
@@ -956,6 +966,16 @@ function DesignBrief(props) {
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), m && m.includes("실패") ? 6000 : 2200); };
 
   useEffect(() => { loadKey("sp2-briefs", []).then((v) => { setSaved(v); setLoaded(true); }); }, []);
+  // 설정(출력설정 > 시안 의뢰서 기본값)에서 지정한 기본 테마/견적서 스타일을 반영한다 — 사용자가 이미
+  // 값을 바꿨으면(하드코딩된 기본값과 다르면) 덮어쓰지 않고, 저장된 기존 의뢰서는 전혀 건드리지 않는다.
+  useEffect(() => {
+    loadKey("sp2-brief-defaults", null).then((d) => {
+      if (!d) return;
+      setF((prev) => (prev.brandColor === SIGNPLUS_THEME_COLOR && prev.fontMood === FONT_MOODS[0]
+        ? { ...prev, brandColor: d.theme || prev.brandColor, fontMood: d.style || prev.fontMood }
+        : prev));
+    });
+  }, []);
 
   // 이전 버전(단일 간판종류) 저장 기록을 signItems 배열로 변환
   const migrateSignItems = (r) => {
@@ -2030,7 +2050,7 @@ function ProjectDashboard(props) {
 /* ==================================================================== */
 // 회사정보는 시스템 기본값이 아니라 사용자 데이터이므로, 저장된 값이 없는 최초 실행 시
 // 데모/샘플 값을 채우지 않고 빈 값으로 시작한다(사용자가 직접 입력).
-const DEFAULT_COMPANY = { name: "", biznum: "", ceo: "", addr: "", tel: "", fax: "", email: "" };
+const DEFAULT_COMPANY = { name: "", biznum: "", ceo: "", addr: "", tel: "", fax: "", email: "", homepage: "" };
 
 /* ==================================================================== */
 /*  루트                                                                 */
@@ -2043,11 +2063,12 @@ const NAV = [
   { id: "db", label: "거래처 · 단가", icon: Ico.book },
 ];
 
-// 사이드바 ⚙ 관리자 메뉴 — 현재는 "라이선스"만 구현, 나머지는 향후 v3.8.x에서 채울 준비중 항목
+// 사이드바 ⚙ 관리자 메뉴 — id는 SettingsPage의 SETTINGS_SECTIONS id와 그대로 맞춰
+// (license/program) 클릭 시 설정 페이지의 해당 섹션으로 바로 이동한다. 나머지는 준비중 항목.
 const ADMIN_MENU_ITEMS = [
   { id: "license", label: "라이선스", enabled: true },
   { id: "users", label: "사용자 관리", enabled: false },
-  { id: "settings", label: "프로그램 설정", enabled: false },
+  { id: "program", label: "프로그램 설정", enabled: true },
   { id: "backup", label: "백업/복원", enabled: false },
   { id: "update", label: "업데이트", enabled: false },
   { id: "logs", label: "로그", enabled: false },
@@ -2219,17 +2240,19 @@ function AdminLicensePanel(props) {
     }
   };
 
-  return h("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }, onClick: props.onClose }, [
-    h("div", { key: 1, onClick: (e) => e.stopPropagation(), style: { background: t.bg, borderRadius: DS.radius.lg, padding: DS.spacing.xxxl, width: 860, maxWidth: "92vw", maxHeight: "88vh", overflowY: "auto", border: `1px solid ${t.divider}` } }, [
-      h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: DS.spacing.xl } }, [
-        h("div", {}, [
-          h("div", { style: { fontSize: DS.font.size.xl, fontWeight: DS.font.weight.bold, color: t.ink } }, "관리자 대시보드"),
-          h("div", { style: { fontSize: DS.font.size.sm, color: t.muted, marginTop: DS.spacing.xs } }, "현재 설치의 라이선스 상태를 확인하고 관리합니다."),
-        ]),
-        h("button", { onClick: props.onClose, style: { background: "none", border: "none", cursor: "pointer", color: t.muted } }, Ico.x({ size: 18 })),
+  // props.embedded: true면 설정 페이지의 "라이선스" 섹션 안에 그대로 끼워 넣을 콘텐츠만 반환하고
+  // (모달 오버레이/제목/닫기 버튼 없음), 아니면 기존처럼 전체화면 모달로 렌더링한다.
+  // 라이선스 검증/활성화/초기화 로직(apply/copySerial/resetLicense)은 위에서 전혀 변경하지 않았다.
+  const content = [
+    !props.embedded && h("div", { key: "hdr", style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: DS.spacing.xl } }, [
+      h("div", {}, [
+        h("div", { style: { fontSize: DS.font.size.xl, fontWeight: DS.font.weight.bold, color: t.ink } }, "관리자 대시보드"),
+        h("div", { style: { fontSize: DS.font.size.sm, color: t.muted, marginTop: DS.spacing.xs } }, "현재 설치의 라이선스 상태를 확인하고 관리합니다."),
       ]),
-      msg && h("div", { key: "msg", style: { fontSize: DS.font.size.sm, color: msg.includes("실패") ? t.red : t.green, fontWeight: DS.font.weight.semibold, marginBottom: DS.spacing.lg } }, msg),
-      h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.xl } }, [
+      h("button", { onClick: props.onClose, style: { background: "none", border: "none", cursor: "pointer", color: t.muted } }, Ico.x({ size: 18 })),
+    ]),
+    msg && h("div", { key: "msg", style: { fontSize: DS.font.size.sm, color: msg.includes("실패") ? t.red : t.green, fontWeight: DS.font.weight.semibold, marginBottom: DS.spacing.lg } }, msg),
+    h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.xl } }, [
         // 좌: 관리자 라이선스 — Administrator License / Key input / Apply / Type / Status / Version / Copy / Reset / Logout
         Card(t, { key: "admin", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
           h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.lg } }, "관리자 라이선스"),
@@ -2269,10 +2292,194 @@ function AdminLicensePanel(props) {
           ]),
         ]),
       ]),
+  ];
+  if (props.embedded) return h("div", {}, content);
+  return h("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }, onClick: props.onClose },
+    h("div", { onClick: (e) => e.stopPropagation(), style: { background: t.bg, borderRadius: DS.radius.lg, padding: DS.spacing.xxxl, width: 860, maxWidth: "92vw", maxHeight: "88vh", overflowY: "auto", border: `1px solid ${t.divider}` } }, content)
+  );
+}
+
+
+/* ==================================================================== */
+/*  설정 페이지 — 회사정보/출력설정/프로그램설정/라이선스를 좌측 내비게이션이   */
+/*  있는 화면 하나로 통합한다. 각 섹션은 기존 컴포넌트가 쓰던 저장 키를        */
+/*  그대로 읽고 쓸 뿐(sp2-company/sp2-brand/sp2-pdf-theme/sp2-vendors 등),   */
+/*  검증·계산·IPC 로직은 새로 만들지 않는다(UI/구조 리팩터링 전용).           */
+/* ==================================================================== */
+const SETTINGS_SECTIONS = [
+  { id: "company", label: "회사정보", icon: Ico.edit },
+  { id: "output", label: "출력설정", icon: Ico.image },
+  { id: "program", label: "프로그램설정", icon: Ico.grid },
+  { id: "license", label: "라이선스", icon: Ico.check },
+];
+
+function SettingsPage(props) {
+  const t = props.theme;
+  const [section, setSection] = useState(props.initialSection || "company");
+  // 이미 설정 페이지가 열려 있는 상태에서 사이드바의 다른 진입점(예: "라이선스")을 클릭한 경우에도
+  // 해당 섹션으로 즉시 이동하도록 반영한다.
+  useEffect(() => { if (props.initialSection) setSection(props.initialSection); }, [props.initialSection]);
+
+  let content;
+  if (section === "company") content = h(SettingsCompanySection, { theme: t, company: props.company, onSaveCompany: props.onSaveCompany });
+  else if (section === "output") content = h(SettingsOutputSection, { theme: t });
+  else if (section === "program") content = h(SettingsProgramSection, { theme: t, vendors: props.vendors });
+  else if (section === "license") content = h(AdminLicensePanel, { theme: t, license: props.license, company: props.company, onActivated: props.onActivated, embedded: true });
+
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
+    SectionTitle(t, "설정", "회사 정보, 출력 옵션, 프로그램 환경, 라이선스를 한 곳에서 관리합니다."),
+    h("div", { key: "body", style: { display: "flex", gap: DS.spacing.xxl, alignItems: "flex-start" } }, [
+      h("div", { key: "nav", style: { width: 200, flexShrink: 0, display: "flex", flexDirection: "column", gap: DS.spacing.xs } },
+        SETTINGS_SECTIONS.map((s) => {
+          const active = section === s.id;
+          return h("button", {
+            key: s.id, onClick: () => setSection(s.id),
+            style: { display: "flex", alignItems: "center", gap: DS.spacing.md, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, border: "none", cursor: "pointer", background: active ? t.accentSoft : "transparent", color: active ? t.accent : t.ink, fontSize: DS.font.size.base, fontWeight: active ? DS.font.weight.bold : DS.font.weight.medium, fontFamily: FONT, textAlign: "left" },
+          }, [s.icon({ size: 15 }), h("span", { key: 2 }, s.label)]);
+        })
+      ),
+      h("div", { key: "content", style: { flex: 1, minWidth: 0 } }, content),
     ]),
   ]);
 }
 
+function SettingsCompanySection(props) {
+  const t = props.theme;
+  const [c, setC] = useState(props.company);
+  const [logo, setLogo] = useState(null);
+  const [stamp, setStamp] = useState(null);
+  const [saved, setSaved] = useState(false);
+  const set = (k) => (e) => setC((p) => ({ ...p, [k]: e.target.value }));
+
+  useEffect(() => { setC(props.company); }, [props.company]);
+  useEffect(() => { loadKey("sp2-brand", {}).then((b) => { if (b.logo) setLogo(b.logo); if (b.stamp) setStamp(b.stamp); }); }, []);
+
+  const save = () => { props.onSaveCompany(c); setSaved(true); setTimeout(() => setSaved(false), 2000); };
+  // 로고/도장 로직은 기존 견적 계산기(QuoteCalculator)의 pickLogo/pickStamp/clearLogo/clearStamp와
+  // 완전히 동일하다 — 같은 sp2-brand 키를 읽고 쓸 뿐, 검증/저장 방식은 새로 만들지 않았다.
+  const pickLogo = async () => { const d = await window.api.pickImage(); if (d) { setLogo(d); const b = await loadKey("sp2-brand", {}); await saveKey("sp2-brand", { ...b, logo: d }); } };
+  const pickStamp = async () => { const d = await window.api.pickImage(); if (d) { setStamp(d); const b = await loadKey("sp2-brand", {}); await saveKey("sp2-brand", { ...b, stamp: d }); } };
+  const clearLogo = async () => { setLogo(null); const b = await loadKey("sp2-brand", {}); delete b.logo; await saveKey("sp2-brand", b); };
+  const clearStamp = async () => { setStamp(null); const b = await loadKey("sp2-brand", {}); delete b.stamp; await saveKey("sp2-brand", b); };
+
+  return Card(t, { style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+    h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "회사정보"),
+    h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.xl } }, "회사명은 견적서 PDF·시안 의뢰서 등 문서 제목·작성자란에 자동으로 표시됩니다."),
+    h("div", { key: "fields", style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg, maxWidth: 560 } }, [
+      h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 120px", gap: DS.spacing.lg } }, [
+        Field(t, "회사명", TextInput(t, { value: c.name, onChange: set("name"), placeholder: "Signplus+" })),
+        Field(t, "대표자", TextInput(t, { value: c.ceo, onChange: set("ceo"), placeholder: "홍길동" })),
+      ]),
+      Field(t, "사업자번호", TextInput(t, { value: c.biznum, onChange: set("biznum"), placeholder: "123-45-67890" })),
+      Field(t, "주소", TextInput(t, { value: c.addr, onChange: set("addr"), placeholder: "강원특별자치도 춘천시 ○○로 123" })),
+      h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
+        Field(t, "전화번호", TextInput(t, { value: c.tel, onChange: set("tel"), placeholder: "033-123-4567" })),
+        Field(t, "팩스", TextInput(t, { value: c.fax, onChange: set("fax"), placeholder: "033-123-4568" })),
+      ]),
+      Field(t, "이메일", TextInput(t, { value: c.email, onChange: set("email"), placeholder: "signplus@naver.com" })),
+      Field(t, "홈페이지", TextInput(t, { value: c.homepage || "", onChange: set("homepage"), placeholder: "https://" })),
+      h("div", { key: 3, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
+        Field(t, "회사 로고", h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center" } }, [
+          Btn(t, { variant: "ghost", onClick: pickLogo }, [Ico.image({ size: 14 }), logo ? " 로고 변경" : " 로고 등록"]),
+          logo && h("span", { onClick: clearLogo, style: { fontSize: DS.font.size.xs, color: t.green, cursor: "pointer" } }, "✓ 삭제"),
+        ])),
+        Field(t, "직인", h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center" } }, [
+          Btn(t, { variant: "ghost", onClick: pickStamp }, [Ico.image({ size: 14 }), stamp ? " 직인 변경" : " 직인 등록"]),
+          stamp && h("span", { onClick: clearStamp, style: { fontSize: DS.font.size.xs, color: t.green, cursor: "pointer" } }, "✓ 삭제"),
+        ])),
+      ]),
+    ]),
+    h("div", { key: "note", style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.lg } }, "※ 회사명을 등록하지 않으면 문서 제목에 'Signplus+'가 기본으로 표시됩니다."),
+    h("div", { key: "actions", style: { display: "flex", gap: DS.spacing.md, marginTop: DS.spacing.xl, alignItems: "center" } }, [
+      Btn(t, { variant: "accent", onClick: save }, "저장"),
+      saved && h("span", { style: { fontSize: DS.font.size.sm, color: t.green, fontWeight: DS.font.weight.semibold } }, "저장되었습니다"),
+    ]),
+  ]);
+}
+
+function SettingsOutputSection(props) {
+  const t = props.theme;
+  const [pdfTheme, setPdfThemeState] = useState("classic");
+  const [briefTheme, setBriefTheme] = useState(SIGNPLUS_THEME_COLOR);
+  const [briefStyle, setBriefStyle] = useState(FONT_MOODS[0]);
+
+  // 기존 QuoteCalculator/DesignBrief가 쓰는 저장 키(sp2-pdf-theme)를 그대로 읽고 쓴다.
+  // sp2-brief-defaults는 새 시안 의뢰서를 열 때 적용될 기본값으로, 기존에 저장된 의뢰서에는 영향 없다.
+  useEffect(() => {
+    loadKey("sp2-pdf-theme", "classic").then(setPdfThemeState);
+    loadKey("sp2-brief-defaults", null).then((d) => {
+      if (d) { setBriefTheme(d.theme || SIGNPLUS_THEME_COLOR); setBriefStyle(d.style || FONT_MOODS[0]); }
+    });
+  }, []);
+
+  const changePdfTheme = (v) => { setPdfThemeState(v); saveKey("sp2-pdf-theme", v); };
+  const changeBriefTheme = (v) => { setBriefTheme(v); saveKey("sp2-brief-defaults", { theme: v, style: briefStyle }); };
+  const changeBriefStyle = (v) => { setBriefStyle(v); saveKey("sp2-brief-defaults", { theme: briefTheme, style: v }); };
+
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
+    Card(t, { key: "brief", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "시안 의뢰서 기본값"),
+      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.lg } }, "새로 여는 시안 의뢰서에 적용되는 기본 테마·견적서 스타일입니다. 이미 저장된 의뢰서는 그대로 유지됩니다."),
+      h("div", { key: "fields", style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg, maxWidth: 560 } }, [
+        Field(t, "테마", h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center" } }, [
+          h("input", { type: "color", value: briefTheme, onChange: (e) => changeBriefTheme(e.target.value), style: { width: 40, height: 36, border: `1px solid ${t.divider}`, borderRadius: DS.radius.sm, padding: 0, background: "none" } }),
+          TextInput(t, { value: briefTheme, onChange: (e) => changeBriefTheme(e.target.value), style: { flex: 1, fontFamily: MONO } }),
+        ])),
+        Field(t, "견적서 스타일", Sel(t, { value: briefStyle, onChange: (e) => changeBriefStyle(e.target.value) }, FONT_MOODS)),
+      ]),
+    ]),
+    Card(t, { key: "pdf", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "PDF 옵션"),
+      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.lg } }, "견적 계산기의 PDF·엑셀 내보내기에 공통으로 적용되는 테마입니다."),
+      h("div", { key: "field", style: { maxWidth: 280 } }, Field(t, "견적서 테마", Sel(t, { value: pdfTheme, onChange: (e) => changePdfTheme(e.target.value) }, Object.keys(QUOTE_THEMES).map((k) => ({ value: k, label: QUOTE_THEMES[k].name }))))),
+    ]),
+    Card(t, { key: "excel", style: { opacity: 0.65 } }, [
+      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "Excel 옵션"),
+      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted } }, "추후 제공 예정 (준비중)"),
+    ]),
+  ]);
+}
+
+function SettingsProgramSection(props) {
+  const t = props.theme;
+  const vendors = props.vendors || [];
+  const [storageDir, setStorageDir] = useState("");
+  const [defaultVendor, setDefaultVendor] = useState("jeil");
+
+  useEffect(() => {
+    if (window.system && window.system.getStorageDir) window.system.getStorageDir().then((p) => setStorageDir(p || "-"));
+    loadKey("sp2-default-vendor", "jeil").then(setDefaultVendor);
+  }, []);
+
+  const changeDefaultVendor = (v) => { setDefaultVendor(v); saveKey("sp2-default-vendor", v); };
+  const defaultVendorObj = vendors.find((v) => v.id === defaultVendor) || vendors.find((v) => v.isDefault) || vendors[0];
+
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
+    Card(t, { key: "storage", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "저장 위치"),
+      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.md } }, "이 컴퓨터에서 견적·프로젝트·거래처·단가 데이터가 저장되는 폴더입니다."),
+      h("div", { key: "path", style: { fontFamily: MONO, fontSize: DS.font.size.sm, color: t.ink, background: t.surface2, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, wordBreak: "break-all" } }, storageDir || "불러오는 중..."),
+    ]),
+    Card(t, { key: "autobackup", style: { opacity: 0.65 } }, [
+      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "자동 백업"),
+      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted } }, "추후 제공 예정 (준비중) — 지금은 사이드바의 백업/복원 버튼으로 수동 백업할 수 있습니다."),
+    ]),
+    Card(t, { key: "vendor", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "기본 거래처"),
+      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.lg } }, "견적 계산기를 새로 열 때 기본으로 선택되는 거래처입니다."),
+      h("div", { key: "field", style: { maxWidth: 280 } }, Field(t, "기본 거래처", Sel(t, { value: defaultVendor, onChange: (e) => changeDefaultVendor(e.target.value) }, vendors.map((v) => ({ value: v.id, label: v.name + (v.isDefault ? " (기본)" : "") }))))),
+    ]),
+    Card(t, { key: "presetbook", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "기본 단가표"),
+      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.md } }, "기본 거래처에 연결된 단가표가 새 견적서에 자동으로 불러와집니다."),
+      h("div", { key: "val", style: { fontSize: DS.font.size.sm, color: t.ink, fontWeight: DS.font.weight.semibold } }, defaultVendorObj ? `${defaultVendorObj.name} 단가표` : "-"),
+    ]),
+    Card(t, { key: "misc", style: { opacity: 0.65 } }, [
+      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "기타 프로그램 옵션"),
+      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted } }, "추후 제공 예정 (준비중)"),
+    ]),
+  ]);
+}
 
 function App() {
   const [mode, setMode] = useState("light");
@@ -2282,13 +2489,13 @@ function App() {
   const [vendors, setVendors] = useState([{ id: "jeil", name: "제일에코", isDefault: true }]);
   const [company, setCompany] = useState(DEFAULT_COMPANY);
   const [ready, setReady] = useState(false);
-  const [companyOpen, setCompanyOpen] = useState(false);
   const [backupMsg, setBackupMsg] = useState("");
   const [license, setLicense] = useState(null); // null=확인중, {activated:bool}
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
-  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState("company"); // 설정 페이지 진입 시 열릴 섹션
   const [openQuoteId, setOpenQuoteId] = useState(null);
   const openQuoteInCalculator = (quoteId) => { setOpenQuoteId(quoteId); setTab("quote"); };
+  const openSettings = (sectionId) => { setSettingsSection(sectionId); setTab("settings"); };
 
   const checkLicense = async () => {
     if (window.license && window.license.status) {
@@ -2402,7 +2609,7 @@ function App() {
         ]);
       })),
       // 회사정보 설정 버튼
-      h("button", { key: 3, onClick: () => setCompanyOpen(true), style: { display: "flex", alignItems: "center", gap: DS.spacing.md, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, border: `1px solid ${t.divider}`, cursor: "pointer", background: t.surface2, color: t.muted, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, fontFamily: FONT, marginBottom: DS.spacing.sm } }, [h("span", { key: 1, style: { display: "inline-flex" } }, Ico.edit({ size: 14 })), h("span", { key: 2 }, " 회사 정보 설정")]),
+      h("button", { key: 3, onClick: () => openSettings("company"), style: { display: "flex", alignItems: "center", gap: DS.spacing.md, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, border: `1px solid ${tab === "settings" ? t.accent : t.divider}`, cursor: "pointer", background: tab === "settings" ? t.accentSoft : t.surface2, color: tab === "settings" ? t.accent : t.muted, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, fontFamily: FONT, marginBottom: DS.spacing.sm } }, [h("span", { key: 1, style: { display: "inline-flex" } }, Ico.edit({ size: 14 })), h("span", { key: 2 }, " 설정")]),
       // ⚙ 관리자 메뉴 그룹 — 라이선스만 활성화, 나머지는 향후 v3.8.x에서 채울 준비중 항목
       h("div", { key: "admin-group", style: { marginBottom: DS.spacing.sm } }, [
         h("button", {
@@ -2416,7 +2623,7 @@ function App() {
           ADMIN_MENU_ITEMS.map((item) => h("button", {
             key: item.id,
             disabled: !item.enabled,
-            onClick: () => item.enabled && setAdminPanelOpen(true),
+            onClick: () => item.enabled && openSettings(item.id),
             style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${DS.spacing.sm}px ${DS.spacing.lg}px`, borderRadius: DS.radius.sm, border: "none", cursor: item.enabled ? "pointer" : "not-allowed", background: "transparent", color: item.enabled ? t.ink : t.muted, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.medium, fontFamily: FONT, opacity: item.enabled ? 1 : 0.55 },
           }, [
             h("span", {}, item.label),
@@ -2448,42 +2655,7 @@ function App() {
       tab === "led" && h(LedCalculator, { key: "l", theme: t }),
       tab === "dashboard" && h(ProjectDashboard, { key: "d", theme: t, onOpenQuote: openQuoteInCalculator }),
       tab === "db" && h(DatabaseManager, { key: "db", theme: t, presets, onPresetsChange: changePresets, presetLabel, onPresetLabelChange: changePresetLabel, vendors, onAddVendor: addVendor, onRemoveVendor: removeVendor, loadVendorPresets, saveVendorPresets }),
-    ]),
-    // 회사정보 모달
-    companyOpen && CompanyModal(t, company, saveCompany, () => setCompanyOpen(false)),
-    adminPanelOpen && h(AdminLicensePanel, { theme: t, license, company, onActivated: checkLicense, onClose: () => setAdminPanelOpen(false) }),
-  ]);
-}
-
-function CompanyModal(t, company, onSave, onClose) {
-  return h(CompanyModalInner, { theme: t, company, onSave, onClose });
-}
-function CompanyModalInner(props) {
-  const t = props.theme;
-  const [c, setC] = useState(props.company);
-  const set = (k) => (e) => setC((p) => ({ ...p, [k]: e.target.value }));
-  return h("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }, onClick: props.onClose }, [
-    h("div", { key: 1, onClick: (e) => e.stopPropagation(), style: { background: t.surface, borderRadius: DS.radius.lg, padding: DS.spacing.xxxl, width: 500, maxHeight: "88vh", overflowY: "auto", border: `1px solid ${t.divider}` } }, [
-      h("div", { key: 1, style: { fontSize: DS.font.size.lg, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "공급자 (회사) 정보"),
-      h("div", { key: 2, style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.xl } }, "견적서 PDF 우측 상단·하단·작성자란에 표시됩니다."),
-      h("div", { key: 3, style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
-        h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 120px", gap: DS.spacing.lg } }, [
-          Field(t, "상호", TextInput(t, { value: c.name, onChange: set("name"), placeholder: "싸인플러스 (SIGNPLUS)" })),
-          Field(t, "대표자", TextInput(t, { value: c.ceo, onChange: set("ceo"), placeholder: "홍길동" })),
-        ]),
-        Field(t, "사업자등록번호", TextInput(t, { value: c.biznum, onChange: set("biznum"), placeholder: "123-45-67890" })),
-        Field(t, "주소", TextInput(t, { value: c.addr, onChange: set("addr"), placeholder: "강원특별자치도 춘천시 ○○로 123" })),
-        h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
-          Field(t, "TEL", TextInput(t, { value: c.tel, onChange: set("tel"), placeholder: "033-123-4567" })),
-          Field(t, "FAX", TextInput(t, { value: c.fax, onChange: set("fax"), placeholder: "033-123-4568" })),
-        ]),
-        Field(t, "E-mail", TextInput(t, { value: c.email, onChange: set("email"), placeholder: "signplus@naver.com" })),
-      ]),
-      h("div", { key: 4, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.lg, lineHeight: 1.6 } }, "※ 로고·도장 이미지는 견적 계산기 화면에서 등록합니다. 로고를 등록하지 않으면 'SIGNPLUS+' 텍스트 로고가 표시됩니다."),
-      h("div", { key: 5, style: { display: "flex", gap: DS.spacing.md, marginTop: DS.spacing.xxl, justifyContent: "flex-end" } }, [
-        Btn(t, { key: 1, variant: "ghost", onClick: props.onClose }, "취소"),
-        Btn(t, { key: 2, variant: "accent", onClick: () => { props.onSave(c); props.onClose(); } }, "저장"),
-      ]),
+      tab === "settings" && h(SettingsPage, { key: "settings", theme: t, initialSection: settingsSection, company, onSaveCompany: saveCompany, vendors, license, onActivated: checkLicense }),
     ]),
   ]);
 }
