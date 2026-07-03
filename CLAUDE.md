@@ -73,6 +73,23 @@ Because `storage.set` in different components doesn't share React state, cross-c
 - Release 빌드는 사용자가 요청할 때만 수행한다.
 - 큰 구조 변경이나 데이터 삭제 가능성이 있는 작업은 사용자 승인을 받은 후 진행한다.
 
+## Release Sprint Mode (현재 활성 모드 — 목표: 30일 내 프로덕션 품질 출시)
+
+- **Feature Pack 단위로 작업한다** (예: Settings Pack, Estimate Pack, Project Pack, UI Polish Pack, Performance Pack) — 서로 밀접하게 관련된 작업을 여러 번에 나눠 구현하지 않는다. 하나의 팩을 완전히 끝낸 후 다음으로 넘어간다.
+- **승인 프롬프트 최소화**: QA는 팩당 한 단계로 묶는다. Commit도 팩당 1개로 묶는다. Push도 팩당 1개로 묶는다. 불필요한 중간 단계를 만들지 않는다.
+- **아키텍처 보존**: 항상 `Renderer → IPC → Service → Repository → Provider → Storage` 흐름을 따른다. 이 구조를 우회하지 않는다.
+- **릴리스 우선 개발**: 구현 결정 시 우선순위는 1) 안정성 2) UX 3) 성능 4) 유지보수성 순. 명시적으로 요청받지 않은 미래 플랫폼 기능(Community, Chat, Marketplace, Advertisement, AI 등)은 추가하지 않는다 — Desktop ERP 출시 이후로 보류.
+- **모든 화면상의 설정은 실제 효과가 있어야 한다** — 죽은 옵션·미구현 placeholder 기능을 남기지 않는다.
+- **기본 가정**: 별도 지시가 없는 한 이전 결정을 그대로 따르고, 같은 구현 질문을 다시 묻지 않으며, 기존 프로젝트 관례를 따르고, 하위 호환성을 유지한다.
+- **QA**: 각 Feature Pack 완료 후 QA를 한 번에 묶어서 실행한다.
+- **Git**: Feature Pack 완료당 커밋 1개, 푸시 1개.
+- **보고 형식** (아래 Response 섹션을 대체):
+  - Completed Pack
+  - Files Changed
+  - QA Results
+  - Commit Hash
+- **Release는 명시적으로 요청받았을 때만 빌드한다** (기존 Safety Rules와 동일).
+
 ## Workflow
 
 기본 워크플로우 (별도 지시 없는 한 유지):
@@ -151,7 +168,7 @@ DatabaseManager 수정 시 Dashboard는 건드리지 않는다.
 
 ## Response
 
-보고는 아래 형식만 사용한다.
+Release Sprint Mode가 활성화된 동안은 위 "Release Sprint Mode" 섹션의 보고 형식(Completed Pack/Files Changed/QA Results/Commit Hash)을 따른다. 그 외에는 아래 형식을 사용한다.
 
 - 수정 파일
 - 수정 줄 번호
