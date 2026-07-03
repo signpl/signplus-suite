@@ -11,15 +11,15 @@
 /* ==================================================================== */
 const fs = require("fs");
 const path = require("path");
-const { checkSerial, generateSerial, generateAdminSerial } = require("./license-common.js");
+const { checkSerial, generateSerial, generateAdminSerial, generateBetaSerial, BETA_VALID_DAYS } = require("./license-common.js");
 
 /* ------------------------------------------------------------------ */
 /*  베타 단계의 라이선스 티어(Trial/Pro) — license-common.js의 시리얼      */
-/*  종류(admin/customer, SPXA-/SPX- 형식·검증 로직)는 전혀 건드리지 않고,   */
-/*  기존 type 값에 UI/표시용 tier 라벨만 얹는다. 새 종류가 생기면 이       */
-/*  테이블에 한 줄만 추가하면 되도록 열어둔다(추후 확장 대비).             */
+/*  종류(admin/customer/beta, SPXA-/SPX-/SPS-BETA- 형식·검증 로직)는       */
+/*  전혀 건드리지 않고, 기존 type 값에 UI/표시용 tier 라벨만 얹는다.        */
+/*  새 종류가 생기면 이 테이블에 한 줄만 추가하면 되도록 열어둔다.          */
 /* ------------------------------------------------------------------ */
-const TIER_BY_TYPE = { admin: "pro", customer: "trial" };
+const TIER_BY_TYPE = { admin: "pro", customer: "trial", beta: "trial" };
 const TIER_INFO = {
   pro: { label: "Pro Version", unlimited: true },
   trial: { label: "Trial Version", unlimited: false },
@@ -42,11 +42,25 @@ function createLicenseService({ getStorageDir }) {
     return TIER_BY_TYPE[type] || "trial";
   }
 
+  // 베타 공용 시리얼은 발급일을 시리얼에 담지 않으므로(같은 값을 여러 기기가 공유), 이 기기에서
+  // "최초 활성화한 시각"(license.json의 activatedAt)을 기준으로 30일 만료를 직접 계산한다.
+  function betaStatus(data) {
+    const issuedAt = data.activatedAt ? new Date(data.activatedAt) : new Date();
+    const expiresAt = new Date(issuedAt.getTime() + BETA_VALID_DAYS * 86400000);
+    const now = new Date();
+    const daysLeft = Math.ceil((expiresAt.getTime() - now.getTime()) / 86400000);
+    const expired = now.getTime() > expiresAt.getTime();
+    if (expired) return { activated: false, expired: true, type: "beta", tier: tierOf("beta") };
+    return { activated: true, serial: data.serial, type: "beta", tier: tierOf("beta"), daysLeft, expiresAt, issuedAt };
+  }
+
   function getStatus() {
     const data = readLicenseFile();
     if (!data || !data.serial) return { activated: false };
     const check = checkSerial(data.serial);
-    if (!check.valid || check.expired) return { activated: false, expired: !!check.expired, type: check.type, tier: check.type ? tierOf(check.type) : undefined };
+    if (!check.valid) return { activated: false };
+    if (check.type === "beta") return betaStatus(data);
+    if (check.expired) return { activated: false, expired: !!check.expired, type: check.type, tier: check.type ? tierOf(check.type) : undefined };
     return { activated: true, serial: data.serial, type: check.type, tier: tierOf(check.type), daysLeft: check.daysLeft, expiresAt: check.expiresAt, issuedAt: check.issuedAt };
   }
 
@@ -62,13 +76,16 @@ function createLicenseService({ getStorageDir }) {
 
     const check = checkSerial(serial);
     if (!check.valid) return { ok: false, error: "유효하지 않은 시리얼 번호입니다. 형식과 오탈자를 확인해주세요." };
-    if (check.expired) return { ok: false, error: "이 시리얼은 이미 만료되었습니다 (발급일로부터 30일 경과). 새 시리얼을 발급받아 입력해주세요." };
+    // 베타 공용 시리얼은 발급일 개념이 없어(check.expired가 계산되지 않음) 활성화 시점에는 만료를
+    // 판단하지 않는다 — 지금이 바로 이 기기의 "최초 활성화 시각"이 되어 30일이 새로 시작된다.
+    if (check.type !== "beta" && check.expired) return { ok: false, error: "이 시리얼은 이미 만료되었습니다 (발급일로부터 30일 경과). 새 시리얼을 발급받아 입력해주세요." };
     fs.writeFileSync(
       licenseFile(),
       JSON.stringify({ serial: String(serial).trim().toUpperCase(), activatedAt: new Date().toISOString(), mode: "offline" }, null, 2),
       "utf-8"
     );
-    return { ok: true, type: check.type, tier: tierOf(check.type), daysLeft: check.daysLeft };
+    const daysLeft = check.type === "beta" ? BETA_VALID_DAYS : check.daysLeft;
+    return { ok: true, type: check.type, tier: tierOf(check.type), daysLeft };
   }
 
   function reset() {
@@ -81,7 +98,7 @@ function createLicenseService({ getStorageDir }) {
     }
   }
 
-  return { getStatus, activate, reset, generateSerial, generateAdminSerial, tierOf, TIER_INFO };
+  return { getStatus, activate, reset, generateSerial, generateAdminSerial, generateBetaSerial, tierOf, TIER_INFO };
 }
 
 module.exports = { createLicenseService, TIER_BY_TYPE, TIER_INFO };

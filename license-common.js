@@ -16,6 +16,7 @@ const LICENSE_SECRET = "Signplus-Suite-Chuncheon-2026-K7Qx9Zm3-Do-Not-Share";
 const CHARSET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // 혼동되는 0/O, 1/I 제외
 const EPOCH_MS = Date.UTC(2026, 0, 1); // 날짜 인코딩 기준일
 const VALID_DAYS = 30; // 일반 시리얼 유효기간
+const BETA_VALID_DAYS = 30; // 베타 공용 시리얼 유효기간(발급일이 아니라 "최초 활성화 시각" 기준 — license-service.js에서 계산)
 
 function checksum(body, secret) {
   const h = crypto.createHmac("sha256", secret || LICENSE_SECRET).update(body).digest("hex");
@@ -76,11 +77,26 @@ function generateAdminSerial() {
   return `SPXA-${g1}-${g2}-${g3}-${ck}`;
 }
 
+/* 베타 테스터 전원에게 배포하는 공용 시리얼 생성 — 형식: SPS-BETA-XXXX-XXXX-CCCC
+ * 일반/관리자 시리얼과 달리 발급일을 시리얼에 새기지 않는다(같은 값을 여러 기기에서 쓰므로
+ * "발급일"이 의미가 없음). 대신 각 기기가 이 시리얼을 처음 입력한 시각(활성화 시각)을 기준으로
+ * 30일을 계산한다 — 계산은 checkSerial이 아니라 활성화 기록을 가진 license-service.js가 담당한다. */
+function generateBetaSerial() {
+  const g1 = randomGroup(4);
+  const g2 = randomGroup(4);
+  const body = "SPSBETA" + g1 + g2;
+  const ck = checksum(body);
+  return `SPS-BETA-${g1}-${g2}-${ck}`;
+}
+
 /*
  * 시리얼 상세 검증. 반환값:
  *   { valid:false } — 형식이 잘못됐거나 위변조된 시리얼
  *   { valid:true, type:'admin' } — 관리자용, 무제한
  *   { valid:true, type:'customer', expired, daysLeft, issuedAt, expiresAt } — 일반용
+ *   { valid:true, type:'beta' } — 베타 공용 시리얼. 체크섬까지 통과해야 valid:true이며(접두사만
+ *     보고 통과시키지 않음), 발급일 개념이 없어 daysLeft/expired는 계산하지 않는다(license-service.js가
+ *     활성화 기록으로 계산).
  */
 function checkSerial(serial) {
   if (!serial) return { valid: false };
@@ -91,6 +107,13 @@ function checkSerial(serial) {
     const body = "SPXA" + admin[1] + admin[2] + admin[3];
     if (checksum(body) !== admin[4]) return { valid: false };
     return { valid: true, type: "admin", expired: false, daysLeft: Infinity };
+  }
+
+  const beta = clean.match(/^SPS-BETA-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})$/);
+  if (beta) {
+    const body = "SPSBETA" + beta[1] + beta[2];
+    if (checksum(body) !== beta[3]) return { valid: false };
+    return { valid: true, type: "beta" };
   }
 
   const cust = clean.match(/^SPX-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})$/);
@@ -113,5 +136,5 @@ function isValidSerial(serial) {
   return checkSerial(serial).valid;
 }
 
-module.exports = { generateSerial, generateAdminSerial, checkSerial, isValidSerial, LICENSE_SECRET, VALID_DAYS };
+module.exports = { generateSerial, generateAdminSerial, generateBetaSerial, checkSerial, isValidSerial, LICENSE_SECRET, VALID_DAYS, BETA_VALID_DAYS };
 

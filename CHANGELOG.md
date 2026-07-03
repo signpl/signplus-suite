@@ -5,6 +5,14 @@
 - USER/MASTER 구조
 - 시리얼 생성기
 
+## v3.8.6 Beta Trial Serial
+
+- 베타 테스터 전원에게 배포할 공용 시리얼 종류 추가: `SPS-BETA-XXXX-XXXX-XXXX` (`license-common.js`의 `generateBetaSerial`)
+- 접두사만으로 통과되지 않고 기존과 동일한 HMAC 체크섬 검증을 거침(`checkSerial`에 `beta` 분기 추가, 하드코딩된 "항상 유효" 문자열 없음)
+- 발급일이 아니라 "이 기기에서 최초 활성화한 시각"을 기준으로 30일 만료 계산(`license-service.js`, 공유 시리얼이라 발급일 개념이 의미 없음)
+- 만료 시 기존 `LicenseGate`로 앱 진입 차단 — 기존 Trial/Pro 흐름과 동일
+- 하위호환: 기존 Trial(customer)/Pro(admin) 시리얼과 `license.json` 포맷 변경 없음, tier 매핑에 `beta -> trial` 한 줄만 추가
+
 ## v3.8.5 Trial and Pro License System
 
 - 베타 테스트를 위해 라이선스를 Trial/Pro 2종으로 정리 (기존 일반=Trial, 관리자=Pro로 매핑, 시리얼 형식·검증 로직은 변경 없음)
