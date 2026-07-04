@@ -106,6 +106,17 @@ Because `storage.set` in different components doesn't share React state, cross-c
   - Commit Hash
 - **Release는 명시적으로 요청받았을 때만 빌드한다** (기존 Safety Rules와 동일).
 
+## Feature Pack Automation
+
+Feature Pack 실행 시, 아래 조건 중 하나를 만나기 전까지 구현→검증 파이프라인을 자동으로 끝까지 진행한다 — 개별 QA·진단·스크린샷·로그 확인·앱 실행 단계마다 멈추지 않는다:
+
+- Windows가 권한 있는 작업(프로세스 종료, 파일 삭제 등)에 명시적 승인을 요구할 때
+- 사용자 상호작용이 필요할 때
+- 자동 복구가 실패했을 때
+- 비즈니스 판단이 필요할 때
+
+UI Feature Pack은 다음 순서로 끊지 않고 진행한다: 구현 → Static QA → 앱 실행 → UI 확인 → 스크린샷 캡처 → 기대 동작과 비교 → Smoke Test → Commit → Push. 보고 형식은 위 Release Sprint Mode의 형식을 그대로 따른다.
+
 ## Build & Release Pipeline
 
 Release 빌드(`npm run dist`)가 요청되면, 중단하기 전에 아래 파이프라인을 항상 자동으로 전부 수행한다:
