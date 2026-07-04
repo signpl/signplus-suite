@@ -148,7 +148,9 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     ws.getCell(`E${r}`).value = company.name;
     ws.getCell(`E${r}`).font = F(null, 15, true);
     ws.getCell(`E${r}`).alignment = { horizontal: "right" };
-    ws.getRow(r).height = 36;
+    // 27pt 볼드 타이틀이 한 줄 안에 완전히 보이려면 행 높이가 폰트 크기보다 충분히 커야 함
+    // (기존 36은 27pt 텍스트 실측 라인높이보다 낮아 다음 줄과 겹쳐 잘려 보이는 원인이었음)
+    ws.getRow(r).height = 46;
     r++;
 
     ws.getCell(`A${r}`).value = "QUOTATION";
@@ -189,7 +191,8 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
       ws.getCell(`B${rr}`).value = m[1];
       ws.getCell(`B${rr}`).font = F(null, 11);
       ws.getCell(`B${rr}`).alignment = { horizontal: "left", indent: 1 };
-      ws.getRow(rr).height = 20 + padBoost;
+      // 견적일자/유효기간 등 날짜 값이 잘리지 않도록 스타일 padBoost가 음수여도 최소 높이를 보장
+      ws.getRow(rr).height = Math.max(22, 20 + padBoost);
     });
     // 합계 박스 (E=라벨, F:G=금액 병합, 3행)
     const sumBox = [
@@ -212,7 +215,8 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
       }
       ["E", "F", "G"].forEach((col) => { ws.getCell(`${col}${rr}`).border = allBorder; });
     });
-    ws.getRow(metaStart).height = 32 + padBoost;
+    // 15pt 볼드 합계금액이 잘리지 않도록 최소 높이 보장
+    ws.getRow(metaStart).height = Math.max(30, 32 + padBoost);
     r = metaStart + meta.length + 1;
 
     // 품목 헤더
@@ -237,7 +241,7 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     const minRows = displayItems.length <= 2 ? 10 : displayItems.length <= 4 ? 9 : displayItems.length <= 8 ? 7 : 6;
     const rowCount = Math.max(displayItems.length, minRows);
     const rowHBase = rowCount <= 7 ? 34 : rowCount <= 10 ? 28 : rowCount <= 15 ? 24 : rowCount <= 20 ? 21 : 19;
-    const rowH = Math.max(16, rowHBase + padBoost);
+    const rowH = Math.max(18, rowHBase + padBoost);
     const itemsStartRow = r;
     for (let idx = 0; idx < rowCount; idx++) {
       const it = displayItems[idx];
@@ -269,8 +273,8 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
 
     // 열 너비 자동 계산 — 실제 데이터 폭에 맞추되 기존 고정폭을 최소값으로 유지하고 과도한 확장은 상한으로 제한.
     // 품목명/규격은 넉넉하게, 번호/수량/단가/금액/비고 같은 숫자·짧은 열은 계속 컴팩트하게 유지한다.
-    const MIN_W = [12, 26, 21, 10, 15, 17, 14];
-    const MAX_W = [15, 58, 42, 13, 21, 23, 19];
+    const MIN_W = [12, 32, 26, 10, 15, 17, 14];
+    const MAX_W = [15, 64, 48, 13, 21, 23, 19];
     const colWidths = colMaxLen.map((len, i) => Math.min(Math.max(len + 3, MIN_W[i]), MAX_W[i]));
     colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 

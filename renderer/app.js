@@ -1046,7 +1046,7 @@ function QuoteCalculator(props) {
           { id: uid(), name: `LED 3구 모듈 (${sizeNum}각×${chQty}자)`, spec: `3구 2835 1W · ${modulesPerChar}개/자×${chQty}자`, unit: "개", unitPrice: ledModulePrice, qty: totalModules, marginOverride: null },
         ];
         if (withAssembly) {
-          newItems.push({ id: uid(), name: `LED 조립비 (${sizeNum}각×${chQty}자)`, spec: `개당 ${assemblyPricePerModule}원`, unit: "개", unitPrice: assemblyPricePerModule, qty: totalModules, marginOverride: null });
+          newItems.push({ id: uid(), name: `LED 조립비 (${sizeNum}각×${chQty}자)`, spec: "조립비 / 실리콘작업", unit: "개", unitPrice: assemblyPricePerModule, qty: totalModules, marginOverride: null });
         }
         setItems((p) => [...p.filter((i) => i.name || i.unitPrice), ...newItems]);
         flash(`LED 모듈 ${totalModules}개${withAssembly ? " + 조립비" : ""} 추가됨`);
