@@ -135,6 +135,11 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     const F = (name, size, bold, color) => ({ name: name || "맑은 고딕", size: size || 10, bold: !!bold, color: color ? { argb: color } : undefined });
     const money = '#,##0';
 
+    // 열 너비 자동 계산용 — 한글(전각) 문자는 폭 2로 계산해 실제 표시 폭에 가깝게 추정
+    const strWidth = (s) => { s = String(s == null ? "" : s); let w = 0; for (const ch of s) w += ch.charCodeAt(0) > 0x2E80 ? 2 : 1; return w; };
+    const colMaxLen = [0, 0, 0, 0, 0, 0, 0];
+    const track = (ci, v) => { colMaxLen[ci] = Math.max(colMaxLen[ci], strWidth(v)); };
+
     let r = 1;
     // 제목
     ws.mergeCells(`A${r}:C${r}`);
@@ -217,6 +222,7 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     const headRow = r;
     const heads = ["No.", "품목명", "규격 / 사양", "수량", "단가", "금액", "비고"];
     heads.forEach((hh, i) => {
+      track(i, hh);
       const cell = ws.getCell(headRow, i + 1);
       cell.value = hh;
       cell.font = F("맑은 고딕", 10, true, ex.tableHeadText);
@@ -233,6 +239,7 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     const minRows = displayItems.length <= 2 ? 10 : displayItems.length <= 4 ? 9 : displayItems.length <= 8 ? 7 : 6;
     const rowCount = Math.max(displayItems.length, minRows);
     const rowH = rowCount <= 7 ? 30 : rowCount <= 10 ? 24 : rowCount <= 15 ? 20 : rowCount <= 20 ? 17 : 15;
+    const itemsStartRow = r;
     for (let idx = 0; idx < rowCount; idx++) {
       const it = displayItems[idx];
       const rr = r + idx;
@@ -247,6 +254,7 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
         "",
       ];
       cells.forEach((v, ci) => {
+        track(ci, v);
         const cell = ws.getCell(rr, ci + 1);
         cell.value = v;
         cell.font = F("맑은 고딕", 10);
@@ -259,6 +267,29 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
       ws.getRow(rr).height = rowH;
     }
     r += rowCount;
+
+    // 열 너비 자동 계산 — 실제 데이터 폭에 맞추되 기존 고정폭을 최소값으로 유지하고 과도한 확장은 상한으로 제한
+    const MIN_W = [11, 25, 20, 9, 14, 16, 13];
+    const MAX_W = [14, 45, 32, 12, 20, 22, 18];
+    const colWidths = colMaxLen.map((len, i) => Math.min(Math.max(len + 2, MIN_W[i]), MAX_W[i]));
+    colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+
+    // 품목명/규격 사양이 계산된 열 너비를 넘으면 줄바꿈을 적용하고 그만큼 행 높이를 늘림(기존 행 높이보다 작아지지 않음)
+    const PER_LINE_H = 14;
+    for (let idx = 0; idx < rowCount; idx++) {
+      const it = displayItems[idx];
+      if (!it) continue;
+      const rr = itemsStartRow + idx;
+      const nameLines = Math.max(1, Math.ceil(strWidth(it.name) / Math.max(1, colWidths[1] - 2)));
+      const specLines = Math.max(1, Math.ceil(strWidth(it.spec) / Math.max(1, colWidths[2] - 2)));
+      const neededLines = Math.max(nameLines, specLines);
+      if (neededLines > 1) {
+        ws.getCell(rr, 2).alignment = Object.assign({}, ws.getCell(rr, 2).alignment, { wrapText: true });
+        ws.getCell(rr, 3).alignment = Object.assign({}, ws.getCell(rr, 3).alignment, { wrapText: true });
+        const neededHeight = neededLines * PER_LINE_H + 6;
+        if (neededHeight > ws.getRow(rr).height) ws.getRow(rr).height = neededHeight;
+      }
+    }
 
     // 합계 (우측 정렬, E=라벨 병합, F=금액)
     const sumRows = [["합 계 (VAT 별도)", subtotal, false], ["부 가 세 (10%)", vat, false], ["합 계 금 액 (VAT 포함)", total, true]];
@@ -338,7 +369,6 @@ ipcMain.handle("export-pdf", async (_e, html, filename) => {
       pageSize: "A4",
       printBackground: true,
       margins: { marginType: "none" },
-      pageRanges: "1-1",
     });
 
     const { canceled, filePath } = await dialog.showSaveDialog({

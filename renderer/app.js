@@ -304,17 +304,34 @@ function buildQuoteHTML(data) {
   const { company, client, quoteNo, quoteDate, validity, items, subtotal, vat, total, logo, stamp, notes } = data;
   const theme = QUOTE_THEMES[data.theme] || QUOTE_THEMES.classic;
 
-  // 품목이 적으면 빈 행으로 채워 정형 유지, 많으면 빈 행 없이. 최대 12행까지 1장 안전.
+  // 품목이 적으면 빈 행으로 채워 정형 유지(단일 페이지). 많으면 페이지를 나눠 잘리지 않게 한다.
   const realItems = items.filter((i) => i.name || i.spec || (Number(i.unitPrice) || 0) * (Number(i.qty) || 0));
   const displayItems = realItems.length ? realItems : items;
-  const MIN_ROWS = 6;      // 최소 표시 행(빈 행 포함)
-  const MAX_1PAGE = 12;    // 1장에 안전하게 들어가는 최대 행
-  const targetRows = Math.min(Math.max(displayItems.length, MIN_ROWS), MAX_1PAGE);
+  const MIN_ROWS = 6;          // 최소 표시 행(빈 행 포함, 단일 페이지에서만 적용)
+  const FIRST_PAGE_ROWS = 12;  // 1페이지 수용량 — 상단 로고/메타/합계 박스 포함(기존 1장 설계와 동일)
+  const CONT_PAGE_ROWS = 24;   // 중간 페이지 수용량 — 품목표만(헤더 반복), 여유있게 보수적으로 설정
+  const LAST_PAGE_ROWS = 18;   // 마지막 페이지 수용량 — 품목표 + 합계/비고/서명 포함, 여유있게 보수적으로 설정
 
-  const bodyRows = displayItems.slice(0, MAX_1PAGE).map((i, idx) => {
+  const isMultiPage = displayItems.length > FIRST_PAGE_ROWS;
+  let itemPages;
+  if (!isMultiPage) {
+    itemPages = [displayItems.slice()];
+  } else {
+    const remaining = displayItems.slice();
+    itemPages = [remaining.splice(0, FIRST_PAGE_ROWS)];
+    // 남은 품목이 항상 1개 이상 있는 페이지로만 나뉘도록, 마지막 페이지 몫(LAST_PAGE_ROWS)을 남기고 중간 페이지를 채운다.
+    while (remaining.length > 0) {
+      const isFinal = remaining.length <= LAST_PAGE_ROWS;
+      const take = isFinal ? remaining.length : Math.min(CONT_PAGE_ROWS, remaining.length - LAST_PAGE_ROWS);
+      itemPages.push(remaining.splice(0, take));
+    }
+  }
+  const lastPageIdx = itemPages.length - 1;
+
+  const rowHtml = (i, no) => {
     const amt = (Number(i.unitPrice) || 0) * (Number(i.qty) || 0);
     return `<tr>
-      <td class="c num">${idx + 1}</td>
+      <td class="c num">${no}</td>
       <td class="l">${esc(i.name)}</td>
       <td class="c spec">${esc(i.spec)}</td>
       <td class="c">${num(i.qty)}${i.unit ? " " + esc(i.unit) : ""}</td>
@@ -322,87 +339,26 @@ function buildQuoteHTML(data) {
       <td class="r b">${amt ? num(amt) : "-"}</td>
       <td class="c"></td>
     </tr>`;
-  });
-  const emptyCount = Math.max(0, targetRows - bodyRows.length);
-  for (let k = 0; k < emptyCount; k++) {
-    bodyRows.push(`<tr class="empty"><td class="c"></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`);
-  }
-  const rows = bodyRows.join("");
+  };
 
   const noteArr = (notes || "").split("\n").map((s) => s.replace(/^\s*\d+\.\s*/, "").trim()).filter(Boolean);
   const notesHtml = (noteArr.length ? noteArr : ["상기 견적은 부가세 포함 금액입니다."])
     .map((s, i) => `<div class="note-line">${i + 1}. ${esc(s)}</div>`)
     .join("");
 
-  return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><style>
-    @page { size: A4; margin: 0; }
-    * { margin:0; padding:0; box-sizing:border-box; }
-    html, body { width:210mm; height:297mm; overflow:hidden; }
-    body { font-family:-apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; color:#222; padding:14mm 13mm; font-size:10px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  // 품목표 헤더 — 페이지가 나뉘어도 매 페이지 반복
+  const tableHeadHtml = `<thead><tr>
+        <th style="width:38px;">No.</th>
+        <th>품목명</th>
+        <th style="width:150px;">규격 / 사양</th>
+        <th style="width:66px;">수량</th>
+        <th style="width:100px;">단가</th>
+        <th style="width:100px;">금액</th>
+        <th style="width:70px;">비고</th>
+      </tr></thead>`;
 
-    /* 헤더 */
-    .top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
-    .title-ko { font-size:36px; font-weight:800; letter-spacing:12px; line-height:1; color:${theme.titleColor}; }
-    .title-en { font-size:12px; letter-spacing:7px; color:#999; margin-top:7px; }
-    .title-bar { width:40px; height:3px; background:${theme.barColor}; margin-top:11px; }
-    .supplier { text-align:right; font-size:10.5px; line-height:1.7; color:#333; min-width:300px; }
-    .supplier .logo-row { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:8px; }
-    .supplier .logo-row img { max-height:36px; max-width:150px; object-fit:contain; }
-    .supplier .brand-txt { font-size:20px; font-weight:800; letter-spacing:1px; }
-
-    /* 메타(좌) + 합계(우) */
-    .mid { display:flex; justify-content:space-between; gap:20px; margin-bottom:16px; }
-    .meta-tbl { border-collapse:collapse; }
-    .meta-tbl td { padding:4px 0; font-size:10.5px; vertical-align:middle; }
-    .meta-tbl .k { color:#333; font-weight:700; letter-spacing:1px; width:64px; padding-right:14px; white-space:nowrap; }
-    .meta-tbl .v { color:#111; white-space:nowrap; }
-    .summary { width:330px; border:1px solid #DDD; align-self:flex-start; }
-    .summary .row { display:flex; justify-content:space-between; align-items:center; padding:7px 14px; }
-    .summary .row.head { background:${theme.headBg}; padding:9px 14px; }
-    .summary .row + .row { border-top:1px solid #EEE; }
-    .summary .lbl { font-size:11px; font-weight:600; letter-spacing:0.5px; color:#333; white-space:nowrap; }
-    .summary .head .lbl { font-weight:700; color:${theme.headText}; }
-    .summary .head .amt { font-size:19px; font-weight:800; color:${theme.headText}; }
-    .summary .amt { font-size:12.5px; font-weight:600; }
-
-    /* 품목 테이블 */
-    table.items { width:100%; border-collapse:collapse; }
-    table.items th { background:${theme.tableHeadBg}; border-top:2px solid ${theme.titleColor}; border-bottom:1px solid #CCC; padding:8px 5px; font-size:10px; font-weight:700; color:${theme.tableHeadText}; }
-    table.items td { border-bottom:1px solid #EEE; padding:7px 7px; font-size:10px; }
-    table.items tr.empty td { height:26px; }
-    table.items .l { text-align:left; }
-    table.items .c { text-align:center; }
-    table.items .r { text-align:right; }
-    table.items .b { font-weight:600; }
-    table.items .num { color:#666; }
-    table.items .spec { color:#555; font-size:9.5px; line-height:1.4; white-space:pre-line; }
-
-    /* 합계행 */
-    .foot-tbl { width:100%; border-collapse:collapse; margin-bottom:20px; }
-    .foot-tbl td { padding:7px 7px; font-size:10.5px; }
-    .foot-tbl .lbl { text-align:right; letter-spacing:1px; color:#333; }
-    .foot-tbl .amt { text-align:right; width:130px; font-weight:600; }
-    .foot-tbl .pad { width:80px; }
-    .foot-tbl .grand td { border-top:2px solid ${theme.grandBorder}; font-weight:800; font-size:12px; }
-    .foot-tbl .grand .amt { font-size:14px; color:${theme.titleColor}; }
-
-    /* 하단 */
-    .bottom { display:flex; justify-content:space-between; gap:24px; }
-    .notes { flex:1; }
-    .notes .hh { font-size:11px; font-weight:700; border-left:3px solid ${theme.barColor}; padding-left:7px; margin-bottom:9px; }
-    .note-line { font-size:10px; color:#444; line-height:1.85; }
-    .sign-box { width:280px; }
-    .sign-tbl { width:100%; border-collapse:collapse; }
-    .sign-tbl th { border:1px solid #CCC; background:${theme.tableHeadBg}; padding:7px; font-size:10px; font-weight:700; width:50%; color:${theme.tableHeadText}; }
-    .sign-tbl td { border:1px solid #CCC; height:66px; position:relative; }
-    .sign-tbl .stamp { position:absolute; right:50%; top:50%; transform:translate(50%,-50%); max-height:56px; max-width:74px; opacity:0.92; }
-    .sign-tbl .writer { text-align:center; font-size:11px; padding-top:24px; font-weight:600; }
-
-    .closing { text-align:center; margin-top:24px; }
-    .closing .msg { font-size:10.5px; color:#555; }
-    .closing .nm { font-size:13px; font-weight:800; letter-spacing:2px; margin-top:6px; color:${theme.closingColor}; }
-  </style></head><body>
-
+  // 상단 로고/타이틀 + 메타/합계 박스 — 1페이지에만 표시
+  const topMidHtml = `
     <div class="top">
       <div>
         <div class="title-ko">견적서</div>
@@ -436,21 +392,10 @@ function buildQuoteHTML(data) {
         <div class="row"><span class="lbl">금액 (부가세 별도)</span><span class="amt">₩ ${num(subtotal)}</span></div>
         <div class="row"><span class="lbl">부 가 세 (10%)</span><span class="amt">₩ ${num(vat)}</span></div>
       </div>
-    </div>
+    </div>`;
 
-    <table class="items">
-      <thead><tr>
-        <th style="width:38px;">No.</th>
-        <th>품목명</th>
-        <th style="width:150px;">규격 / 사양</th>
-        <th style="width:66px;">수량</th>
-        <th style="width:100px;">단가</th>
-        <th style="width:100px;">금액</th>
-        <th style="width:70px;">비고</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-
+  // 합계행/기타 안내사항/서명란/맺음말 — 마지막 페이지에만 표시
+  const tailHtml = `
     <table class="foot-tbl"><tbody>
       <tr><td class="lbl">합 계 (VAT 별도)</td><td class="amt">${num(subtotal)}</td><td class="pad"></td></tr>
       <tr><td class="lbl">부 가 세 (10%)</td><td class="amt">${num(vat)}</td><td></td></tr>
@@ -476,8 +421,99 @@ function buildQuoteHTML(data) {
     <div class="closing">
       <div class="msg">견적 요청에 감사드리며, 귀사의 무궁한 발전을 기원합니다.</div>
       <div class="nm">${esc(company.name)}</div>
-    </div>
+    </div>`;
 
+  let runningNo = 0;
+  const pagesHtml = itemPages.map((pageItems, pIdx) => {
+    const isFirst = pIdx === 0;
+    const isLast = pIdx === lastPageIdx;
+    let rowsHtml = pageItems.map((i) => { runningNo += 1; return rowHtml(i, runningNo); }).join("");
+    if (!isMultiPage) {
+      const targetRows = Math.min(Math.max(pageItems.length, MIN_ROWS), FIRST_PAGE_ROWS);
+      const emptyCount = Math.max(0, targetRows - pageItems.length);
+      for (let k = 0; k < emptyCount; k++) {
+        rowsHtml += `<tr class="empty"><td class="c"></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
+      }
+    }
+    return `<div class="doc-page">
+      ${isFirst ? topMidHtml : ""}
+      <table class="items">${tableHeadHtml}<tbody>${rowsHtml}</tbody></table>
+      ${isLast ? tailHtml : ""}
+    </div>`;
+  }).join("");
+
+  return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><style>
+    @page { size: A4; margin: 0; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:210mm; }
+    body { font-family:-apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; color:#222; font-size:10px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .doc-page { width:210mm; min-height:297mm; padding:14mm 13mm; page-break-after:always; }
+    .doc-page:last-child { page-break-after:auto; }
+
+    /* 헤더 */
+    .top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
+    .title-ko { font-size:36px; font-weight:800; letter-spacing:12px; line-height:1; color:${theme.titleColor}; }
+    .title-en { font-size:12px; letter-spacing:7px; color:#999; margin-top:7px; }
+    .title-bar { width:40px; height:3px; background:${theme.barColor}; margin-top:11px; }
+    .supplier { text-align:right; font-size:10.5px; line-height:1.7; color:#333; min-width:300px; }
+    .supplier .logo-row { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:8px; }
+    .supplier .logo-row img { max-height:36px; max-width:150px; object-fit:contain; }
+    .supplier .brand-txt { font-size:20px; font-weight:800; letter-spacing:1px; }
+
+    /* 메타(좌) + 합계(우) */
+    .mid { display:flex; justify-content:space-between; gap:20px; margin-bottom:16px; }
+    .meta-tbl { border-collapse:collapse; }
+    .meta-tbl td { padding:4px 0; font-size:10.5px; vertical-align:middle; }
+    .meta-tbl .k { color:#333; font-weight:700; letter-spacing:1px; width:64px; padding-right:14px; white-space:nowrap; }
+    .meta-tbl .v { color:#111; white-space:nowrap; }
+    .summary { width:330px; border:1px solid #DDD; align-self:flex-start; }
+    .summary .row { display:flex; justify-content:space-between; align-items:center; padding:7px 14px; }
+    .summary .row.head { background:${theme.headBg}; padding:9px 14px; }
+    .summary .row + .row { border-top:1px solid #EEE; }
+    .summary .lbl { font-size:11px; font-weight:600; letter-spacing:0.5px; color:#333; white-space:nowrap; }
+    .summary .head .lbl { font-weight:700; color:${theme.headText}; }
+    .summary .head .amt { font-size:19px; font-weight:800; color:${theme.headText}; }
+    .summary .amt { font-size:12.5px; font-weight:600; }
+
+    /* 품목 테이블 */
+    table.items { width:100%; border-collapse:collapse; }
+    table.items th { background:${theme.tableHeadBg}; border-top:2px solid ${theme.titleColor}; border-bottom:1px solid #CCC; padding:8px 5px; font-size:10px; font-weight:700; color:${theme.tableHeadText}; }
+    table.items td { border-bottom:1px solid #EEE; padding:7px 7px; font-size:10px; }
+    table.items tr { page-break-inside:avoid; break-inside:avoid; }
+    table.items tr.empty td { height:26px; }
+    table.items .l { text-align:left; }
+    table.items .c { text-align:center; }
+    table.items .r { text-align:right; }
+    table.items .b { font-weight:600; }
+    table.items .num { color:#666; }
+    table.items .spec { color:#555; font-size:9.5px; line-height:1.4; white-space:pre-line; }
+
+    /* 합계행 */
+    .foot-tbl { width:100%; border-collapse:collapse; margin-bottom:20px; }
+    .foot-tbl td { padding:7px 7px; font-size:10.5px; }
+    .foot-tbl .lbl { text-align:right; letter-spacing:1px; color:#333; }
+    .foot-tbl .amt { text-align:right; width:130px; font-weight:600; }
+    .foot-tbl .pad { width:80px; }
+    .foot-tbl .grand td { border-top:2px solid ${theme.grandBorder}; font-weight:800; font-size:12px; }
+    .foot-tbl .grand .amt { font-size:14px; color:${theme.titleColor}; }
+
+    /* 하단 */
+    .bottom { display:flex; justify-content:space-between; gap:24px; }
+    .notes { flex:1; }
+    .notes .hh { font-size:11px; font-weight:700; border-left:3px solid ${theme.barColor}; padding-left:7px; margin-bottom:9px; }
+    .note-line { font-size:10px; color:#444; line-height:1.85; }
+    .sign-box { width:280px; }
+    .sign-tbl { width:100%; border-collapse:collapse; }
+    .sign-tbl th { border:1px solid #CCC; background:${theme.tableHeadBg}; padding:7px; font-size:10px; font-weight:700; width:50%; color:${theme.tableHeadText}; }
+    .sign-tbl td { border:1px solid #CCC; height:66px; position:relative; }
+    .sign-tbl .stamp { position:absolute; right:50%; top:50%; transform:translate(50%,-50%); max-height:56px; max-width:74px; opacity:0.92; }
+    .sign-tbl .writer { text-align:center; font-size:11px; padding-top:24px; font-weight:600; }
+
+    .closing { text-align:center; margin-top:24px; }
+    .closing .msg { font-size:10.5px; color:#555; }
+    .closing .nm { font-size:13px; font-weight:800; letter-spacing:2px; margin-top:6px; color:${theme.closingColor}; }
+  </style></head><body>
+    ${pagesHtml}
   </body></html>`;
 }
 function esc(s) {
