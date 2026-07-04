@@ -993,7 +993,7 @@ function QuoteCalculator(props) {
     Card(t, { key: "tbl", style: { borderTop: `3px solid ${qAccent}`, boxShadow: DS.shadow.sm } }, [
       h("div", { key: 1, style: { overflowX: "auto" } }, [
         h("table", { key: 1, style: { width: "100%", borderCollapse: "collapse", fontSize: DS.font.size.base, fontFamily: qFont } }, [
-          h("thead", { key: 1 }, h("tr", {}, [th("품목명"), th("규격 / 사양", 140), th("수량", 60), th("단위", 60), th("원가(단가)", 100, "left"), th("개별마진%", 90, "center"), th("판매단가", 100, "right"), th("금액", 110, "right"), h("th", { key: "z", style: { width: 32, background: qHeadBg } })])),
+          h("thead", { key: 1 }, h("tr", {}, [th("품목명"), th("규격 / 사양", 140), th("수량", 100), th("단위", 60), th("원가(단가)", 100, "left"), th("개별마진%", 90, "center"), th("판매단가", 100, "right"), th("금액", 110, "right"), h("th", { key: "z", style: { width: 32, background: qHeadBg } })])),
           h("tbody", { key: 2 }, items.map((i) => {
             const overridden = !(i.marginOverride === null || i.marginOverride === undefined || i.marginOverride === "");
             return h("tr", { key: i.id, style: { borderTop: `1px solid ${t.divider}` } }, [
@@ -1035,7 +1035,7 @@ function QuoteCalculator(props) {
           { id: uid(), name: `LED 3구 모듈 (${sizeNum}각×${chQty}자)`, spec: `3구 2835 1W · 밀도 ${LED_MODULE_DEFAULT_DENSITY}개/㎡`, unit: "개", unitPrice: ledModulePrice, qty: moduleCount, marginOverride: null },
         ];
         if (withAssembly) {
-          newItems.push({ id: uid(), name: `LED 조립비 (${sizeNum}각×${chQty}자)`, spec: `개당 ${assemblyPricePerModule}원`, unit: "개", unitPrice: assemblyPricePerModule, qty: moduleCount, marginOverride: null });
+          newItems.push({ id: uid(), name: `LED 조립비 (${sizeNum}각×${chQty}자)`, spec: LED_ASSEMBLY_SPEC, unit: "개", unitPrice: assemblyPricePerModule, qty: moduleCount, marginOverride: null });
         }
         setItems((p) => [...p.filter((i) => i.name || i.unitPrice), ...newItems]);
         flash(`LED 모듈 ${moduleCount}개${withAssembly ? " + 조립비" : ""} 추가됨`);
