@@ -1020,36 +1020,25 @@ function QuoteCalculator(props) {
     ]),
     // 채널 LED 자동계산 도우미
     Card(t, { key: "led-helper", style: { background: t.surface2, border: `1px dashed ${t.divider}` } }, (() => {
-      const LED_PER_SIZE = { 300: 3, 400: 5, 500: 7, 600: 9, 700: 12, 800: 15, 900: 18, 1000: 22 }; // 각수별 3구 모듈 개수 (근사치)
       const [chSize, setChSize] = useState(""); // 글자 각수(mm) — 새 계산기를 열 때는 비워둠(계산 시 700 기본값 적용, 아래 sizeNum 참고)
       const [chQty, setChQty] = useState("1"); // 글자 수량 기본값
       const [withAssembly, setWithAssembly] = useState(true); // LED 조립 포함 기본 체크
       const ledModulePrice = 180; // 3구 2835 1W 기본 단가
       const assemblyPricePerModule = 170; // LED 조립비 (개당) — 모듈 단가(180)+조립비(170)=LED 포함 350원
       const sizeNum = Number(chSize) || 700;
-      // 입력 각수에 가장 가까운 프로필 찾기, 없으면 보간
-      const sizes = Object.keys(LED_PER_SIZE).map(Number).sort((a, b) => a - b);
-      let modulesPerChar;
-      if (LED_PER_SIZE[sizeNum]) {
-        modulesPerChar = LED_PER_SIZE[sizeNum];
-      } else {
-        const lo = sizes.filter((s) => s <= sizeNum).pop() || sizes[0];
-        const hi = sizes.find((s) => s >= sizeNum) || sizes[sizes.length - 1];
-        if (lo === hi) modulesPerChar = LED_PER_SIZE[lo];
-        else modulesPerChar = Math.round(LED_PER_SIZE[lo] + (LED_PER_SIZE[hi] - LED_PER_SIZE[lo]) * ((sizeNum - lo) / (hi - lo)));
-      }
-      const totalModules = modulesPerChar * (Number(chQty) || 0);
-      const totalModuleCost = totalModules * ledModulePrice;
-      const totalAssemblyCost = withAssembly ? totalModules * assemblyPricePerModule : 0;
+      // LED 계산기(글자 크기로 계산)와 동일한 공통 계산 함수 사용 — 두 화면의 결과가 항상 일치
+      const moduleCount = calcLedModuleCount(calcLedCharArea(sizeNum, sizeNum, Number(chQty) || 0), LED_MODULE_DEFAULT_DENSITY);
+      const totalModuleCost = moduleCount * ledModulePrice;
+      const totalAssemblyCost = withAssembly ? moduleCount * assemblyPricePerModule : 0;
       const addLedItems = () => {
         const newItems = [
-          { id: uid(), name: `LED 3구 모듈 (${sizeNum}각×${chQty}자)`, spec: `3구 2835 1W · ${modulesPerChar}개/자×${chQty}자`, unit: "개", unitPrice: ledModulePrice, qty: totalModules, marginOverride: null },
+          { id: uid(), name: `LED 3구 모듈 (${sizeNum}각×${chQty}자)`, spec: `3구 2835 1W · 밀도 ${LED_MODULE_DEFAULT_DENSITY}개/㎡`, unit: "개", unitPrice: ledModulePrice, qty: moduleCount, marginOverride: null },
         ];
         if (withAssembly) {
-          newItems.push({ id: uid(), name: `LED 조립비 (${sizeNum}각×${chQty}자)`, spec: `개당 ${assemblyPricePerModule}원`, unit: "개", unitPrice: assemblyPricePerModule, qty: totalModules, marginOverride: null });
+          newItems.push({ id: uid(), name: `LED 조립비 (${sizeNum}각×${chQty}자)`, spec: `개당 ${assemblyPricePerModule}원`, unit: "개", unitPrice: assemblyPricePerModule, qty: moduleCount, marginOverride: null });
         }
         setItems((p) => [...p.filter((i) => i.name || i.unitPrice), ...newItems]);
-        flash(`LED 모듈 ${totalModules}개${withAssembly ? " + 조립비" : ""} 추가됨`);
+        flash(`LED 모듈 ${moduleCount}개${withAssembly ? " + 조립비" : ""} 추가됨`);
         // 다음 입력을 위해 기본값으로 리셋 — 글자 수량=1, LED 조립 포함=체크 유지, 글자 각수만 비움
         setChQty("1");
         setChSize("");
@@ -1065,7 +1054,7 @@ function QuoteCalculator(props) {
             h("input", { type: "checkbox", checked: withAssembly, onChange: (e) => setWithAssembly(e.target.checked) }),
             "LED 조립 포함 (170원/개)",
           ]),
-          h("div", { key: "info", style: { fontFamily: MONO, fontSize: DS.font.size.sm, color: t.ink } }, `모듈 ${totalModules}개 · ${won(totalModuleCost)}${withAssembly ? " + 조립 " + won(totalAssemblyCost) : ""} = ${won(totalModuleCost + totalAssemblyCost)}`),
+          h("div", { key: "info", style: { fontFamily: MONO, fontSize: DS.font.size.sm, color: t.ink } }, `모듈 ${moduleCount}개 · ${won(totalModuleCost)}${withAssembly ? " + 조립 " + won(totalAssemblyCost) : ""} = ${won(totalModuleCost + totalAssemblyCost)}`),
           Btn(t, { key: "add", variant: "accent", onClick: addLedItems, style: { padding: `${DS.spacing.md}px ${DS.spacing.xl}px` } }, "견적에 추가"),
         ]),
       ];
@@ -1403,6 +1392,15 @@ function recommendSmps(moduleCount) {
   return SMPS_LINEUP[SMPS_LINEUP.length - 1];
 }
 
+// LED 모듈 개수 공통 계산 — LED 계산기와 견적 계산기의 "채널 LED 자동계산"이 항상 같은 공식·같은 결과를 쓰도록 단일화
+const LED_MODULE_DEFAULT_DENSITY = 75; // 개/㎡ 기본 모듈 밀도
+function calcLedCharArea(charW, charH, charN) {
+  return ((Number(charW) || 0) / 1000) * ((Number(charH) || 0) / 1000) * (Number(charN) || 0);
+}
+function calcLedModuleCount(area, density) {
+  return Math.ceil((Number(area) || 0) * (Number(density) || 0));
+}
+
 function LedCalculator(props) {
   const t = props.theme;
   const [sub, setSub] = useState("channel"); // channel | tube | board
@@ -1429,7 +1427,7 @@ function LedCalculator(props) {
 /* ---- 채널 간판 LED 모듈 계산 (3구 모듈 · 1W 기준) ---- */
 function ChannelLedCalc(props) {
   const t = props.theme;
-  const [mode, setMode] = useState("area"); // area(면적) | count(글자수)
+  const [mode, setMode] = useState("count"); // count(글자 크기) | area(면적) — 기본은 글자 크기로 계산
   // 면적 기준
   const [areaVal, setAreaVal] = useState("1");
   // 글자 기준
@@ -1444,10 +1442,10 @@ function ChannelLedCalc(props) {
 
   const area = mode === "area"
     ? (Number(areaVal) || 0)
-    : ((Number(charW) || 0) / 1000) * ((Number(charH) || 0) / 1000) * (Number(charN) || 0);
+    : calcLedCharArea(charW, charH, charN);
 
   const dens = Number(density) || 0;
-  const moduleCount = Math.ceil(area * dens);
+  const moduleCount = calcLedModuleCount(area, dens);
   const watt = moduleCount * 1; // 3구 모듈 = 1W
   const smpsCap = recommendSmps(moduleCount);
   const smpsQty = Math.max(1, Math.ceil(moduleCount / (smpsCap * 0.8)));
@@ -1464,8 +1462,8 @@ function ChannelLedCalc(props) {
   return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
     Card(t, { key: 1, style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
       h("div", { key: "m", style: { display: "flex", gap: DS.spacing.md, marginBottom: DS.spacing.lg } }, [
-        Btn(t, { key: 1, variant: mode === "area" ? "primary" : "ghost", onClick: () => setMode("area"), style: { flex: 1, justifyContent: "center" } }, "면적으로 계산"),
-        Btn(t, { key: 2, variant: mode === "count" ? "primary" : "ghost", onClick: () => setMode("count"), style: { flex: 1, justifyContent: "center" } }, "글자 크기로 계산"),
+        Btn(t, { key: 1, variant: mode === "count" ? "primary" : "ghost", onClick: () => setMode("count"), style: { flex: 1, justifyContent: "center" } }, "글자 크기로 계산"),
+        Btn(t, { key: 2, variant: mode === "area" ? "primary" : "ghost", onClick: () => setMode("area"), style: { flex: 1, justifyContent: "center" } }, "면적으로 계산"),
       ]),
       mode === "area"
         ? h("div", { key: "a", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: DS.spacing.lg } }, [
@@ -1503,7 +1501,7 @@ function ChannelLedCalc(props) {
 /* ---- LED 형광등 계산 (20W 기준) ---- */
 function TubeLedCalc(props) {
   const t = props.theme;
-  const [mode, setMode] = useState("area"); // area | box
+  const [mode, setMode] = useState("box"); // box(간판 크기) | area(면적) — 기본은 간판 크기로 계산
   const [areaVal, setAreaVal] = useState("3");
   const [boxW, setBoxW] = useState("3000");
   const [boxH, setBoxH] = useState("1000");
@@ -1537,8 +1535,8 @@ function TubeLedCalc(props) {
   return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
     Card(t, { key: 1, style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
       h("div", { key: "m", style: { display: "flex", gap: DS.spacing.md, marginBottom: DS.spacing.lg } }, [
-        Btn(t, { key: 1, variant: mode === "area" ? "primary" : "ghost", onClick: () => setMode("area"), style: { flex: 1, justifyContent: "center" } }, "면적으로 계산"),
-        Btn(t, { key: 2, variant: mode === "box" ? "primary" : "ghost", onClick: () => setMode("box"), style: { flex: 1, justifyContent: "center" } }, "간판 크기로 계산"),
+        Btn(t, { key: 1, variant: mode === "box" ? "primary" : "ghost", onClick: () => setMode("box"), style: { flex: 1, justifyContent: "center" } }, "간판 크기로 계산"),
+        Btn(t, { key: 2, variant: mode === "area" ? "primary" : "ghost", onClick: () => setMode("area"), style: { flex: 1, justifyContent: "center" } }, "면적으로 계산"),
       ]),
       mode === "area"
         ? h("div", { key: "a", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: DS.spacing.lg } }, [
