@@ -485,11 +485,77 @@ function esc(s) {
 }
 
 /* ==================================================================== */
-/*  시안 의뢰서 PDF용 HTML 생성 (여러 간판 항목 · 업무지시서 형태)            */
+/*  견적서 스타일 템플릿 (기본형/심플형/프리미엄형/공공기관/기업형)           */
+/*  시안 의뢰서 PDF·미리보기(클립보드)가 공유하는 단일 정의 — 타이포그래피/     */
+/*  헤딩/표/색상/여백/보더/간격을 이 객체 하나로 통제한다. "기본형"은 이전에    */
+/*  하드코딩돼 있던 값 그대로이므로(기존 저장 파일·PDF와 동일 출력), 값만       */
+/*  저장/표시되던 이전 동작과 하위 호환된다.                                  */
 /* ==================================================================== */
-function buildBriefHTML(data) {
+const BRIEF_TEMPLATES = {
+  "기본형": {
+    font: `"Malgun Gothic","맑은 고딕",sans-serif`,
+    heading: { size: "26px", letterSpacing: "2px", weight: "bold", align: "left", borderBottom: "3px solid #1D1D1F" },
+    section: { color: "#FF6B35", size: "12px", weight: 700, letterSpacing: "1px", extra: "" },
+    table: { headerBg: "#F3F3F3", headerBorder: "1px solid #DDD", cellBorder: "1px solid #EEE", cellPad: "7px 6px", headerPad: "8px 6px", radius: "0px" },
+    colors: { ink: "#1D1D1F", muted: "#888", brand: "#FF6B35", label: "#333", meta: "#555", footer: "#999" },
+    note: { bg: "#FAFAFA", border: "1px solid #EEE", radius: "6px" },
+    layout: { pageMargin: "16mm 15mm", sectionGap: "18px 0 8px", imgRadius: "6px" },
+    text: { marker: "■", divider: "" },
+  },
+  "심플형": {
+    font: `"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif`,
+    heading: { size: "24px", letterSpacing: "4px", weight: 400, align: "left", borderBottom: "none" },
+    section: { color: "#555555", size: "11px", weight: 600, letterSpacing: "2px", extra: "" },
+    table: { headerBg: "transparent", headerBorder: "none", cellBorder: "none", cellPad: "9px 4px", headerPad: "9px 4px", radius: "0px", headerUnderline: "1px solid #CCC" },
+    colors: { ink: "#222222", muted: "#999999", brand: "#333333", label: "#444444", meta: "#777777", footer: "#AAAAAA" },
+    note: { bg: "transparent", border: "none", radius: "0px" },
+    layout: { pageMargin: "20mm 18mm", sectionGap: "22px 0 10px", imgRadius: "0px" },
+    text: { marker: "-", divider: "".padEnd(28, "─") },
+  },
+  "프리미엄형": {
+    font: `Georgia,"Noto Serif KR","Malgun Gothic",serif`,
+    heading: { size: "27px", letterSpacing: "3px", weight: 700, align: "left", borderBottom: "1px solid #C9A227" },
+    section: { color: "#1B2A4A", size: "12px", weight: 700, letterSpacing: "2px", extra: "border-bottom:1px solid #C9A227; padding-bottom:4px; display:inline-block;" },
+    table: { headerBg: "#1B2A4A", headerColor: "#FFFFFF", headerBorder: "1px solid #C9A227", cellBorder: "1px solid #EEE", cellPad: "9px 8px", headerPad: "10px 8px", radius: "0px" },
+    colors: { ink: "#1A1A1A", muted: "#8A8370", brand: "#C9A227", label: "#1B2A4A", meta: "#5A5340", footer: "#B8AF95" },
+    note: { bg: "#FAFBF9", border: "1px solid #C9A227", radius: "2px" },
+    layout: { pageMargin: "18mm 20mm", sectionGap: "24px 0 10px", imgRadius: "2px" },
+    text: { marker: "◆", divider: "◆ ".repeat(14).trim() },
+  },
+  "공공기관": {
+    font: `"Malgun Gothic","맑은 고딕",sans-serif`,
+    heading: { size: "24px", letterSpacing: "1px", weight: 700, align: "center", borderBottom: "2px solid #000000" },
+    section: { color: "#FFFFFF", size: "12px", weight: 700, letterSpacing: "0px", extra: "background:#003366; padding:4px 10px; display:inline-block;" },
+    table: { headerBg: "#E8E8E8", headerBorder: "1px solid #000000", cellBorder: "1px solid #000000", cellPad: "6px 6px", headerPad: "6px 6px", radius: "0px" },
+    colors: { ink: "#000000", muted: "#555555", brand: "#003366", label: "#000000", meta: "#333333", footer: "#666666" },
+    note: { bg: "#FFFFFF", border: "1px solid #000000", radius: "0px" },
+    layout: { pageMargin: "14mm 14mm", sectionGap: "14px 0 6px", imgRadius: "0px" },
+    text: { marker: "□", divider: "".padEnd(30, "=") },
+  },
+  "기업형": {
+    font: `-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif`,
+    heading: { size: "26px", letterSpacing: "-0.5px", weight: 800, align: "left", borderBottom: "3px solid #0071E3" },
+    section: { color: "#0071E3", size: "11px", weight: 700, letterSpacing: "0.4px", extra: "background:#EAF3FE; padding:3px 10px; border-radius:6px; display:inline-block;" },
+    table: { headerBg: "#EAF3FE", headerBorder: "1px solid #D6E4F7", cellBorder: "1px solid #EEF4FC", cellPad: "8px 6px", headerPad: "9px 6px", radius: "8px" },
+    colors: { ink: "#1D1D1F", muted: "#86868B", brand: "#0071E3", label: "#0B3A6B", meta: "#4A6D96", footer: "#A9B8CC" },
+    note: { bg: "#EAF3FE", border: "1px solid #D6E4F7", radius: "10px" },
+    layout: { pageMargin: "16mm 15mm", sectionGap: "20px 0 8px", imgRadius: "10px" },
+    text: { marker: "▸", divider: "– ".repeat(14).trim() },
+  },
+};
+function briefTemplateFor(styleName) {
+  return BRIEF_TEMPLATES[styleName] || BRIEF_TEMPLATES[FONT_MOODS[0]];
+}
+
+/* ==================================================================== */
+/*  시안 의뢰서 PDF용 HTML 생성 (여러 간판 항목 · 업무지시서 형태)            */
+/*  실제 렌더링은 renderDocument(data, template)에 위임 — PDF·미리보기가     */
+/*  같은 템플릿 정의를 쓰도록, 스타일을 이 함수 안에 하드코딩하지 않는다.       */
+/* ==================================================================== */
+function renderDocument(data, template) {
   const { form: f, signItems, images, createdAt, companyName } = data;
   const brandLabel = companyName || "Signplus+"; // 회사 정보(Company Settings)의 이름을 자동 반영, 미설정 시 Signplus+
+  const { font, heading, section, table, colors, note, layout } = template;
   const rows = (signItems || []).map((s, idx) => `
     <tr>
       <td class="c num">${idx + 1}</td>
@@ -508,27 +574,28 @@ function buildBriefHTML(data) {
   <style>
     @page { size: A4; margin: 0; }
     * { box-sizing: border-box; }
-    body { margin:0; font-family: "Malgun Gothic","맑은 고딕",sans-serif; color:#1D1D1F; }
-    .mid { width:210mm; min-height:297mm; padding:16mm 15mm; }
-    .head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #1D1D1F; padding-bottom:14px; margin-bottom:18px; }
-    .head h1 { font-size:26px; margin:0; letter-spacing:2px; }
-    .head .sub { font-size:11px; color:#888; letter-spacing:4px; margin-top:3px; }
-    .head .meta { text-align:right; font-size:11px; color:#555; line-height:1.6; }
-    .head .brand { font-size:15px; font-weight:800; color:#FF6B35; margin-bottom:4px; }
-    .section-title { font-size:12px; font-weight:700; color:#FF6B35; letter-spacing:1px; margin:18px 0 8px; }
+    body { margin:0; font-family: ${font}; color:${colors.ink}; }
+    .mid { width:210mm; min-height:297mm; padding:${layout.pageMargin}; }
+    .head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:${heading.borderBottom}; padding-bottom:14px; margin-bottom:18px; }
+    .head h1 { font-size:${heading.size}; margin:0; letter-spacing:${heading.letterSpacing}; font-weight:${heading.weight}; text-align:${heading.align}; }
+    .head .sub { font-size:11px; color:${colors.muted}; letter-spacing:4px; margin-top:3px; }
+    .head .meta { text-align:right; font-size:11px; color:${colors.meta}; line-height:1.6; }
+    .head .brand { font-size:15px; font-weight:800; color:${colors.brand}; margin-bottom:4px; }
+    .section-title { font-size:${section.size}; font-weight:${section.weight}; color:${section.color}; letter-spacing:${section.letterSpacing}; margin:${layout.sectionGap}; ${section.extra} }
     .meta-tbl { border-collapse:collapse; width:100%; margin-bottom:6px; }
     .meta-tbl td { padding:4px 0; font-size:11px; }
-    .meta-tbl .k { color:#333; font-weight:700; width:80px; white-space:nowrap; }
+    .meta-tbl .k { color:${colors.label}; font-weight:700; width:80px; white-space:nowrap; }
+    .tablewrap { border-radius:${table.radius}; overflow:hidden; }
     table.items { width:100%; border-collapse:collapse; margin-top:6px; }
-    table.items th { background:#F3F3F3; font-size:10.5px; padding:8px 6px; border:1px solid #DDD; }
-    table.items td { font-size:10.5px; padding:7px 6px; border:1px solid #EEE; text-align:center; }
+    table.items th { background:${table.headerBg}; color:${table.headerColor || colors.ink}; font-size:10.5px; padding:${table.headerPad}; border:${table.headerBorder}; ${table.headerUnderline ? `border-bottom:${table.headerUnderline};` : ""} }
+    table.items td { font-size:10.5px; padding:${table.cellPad}; border:${table.cellBorder}; text-align:center; }
     table.items td.small { font-size:9.5px; text-align:left; }
-    .note { font-size:10.5px; color:#333; white-space:pre-wrap; line-height:1.7; background:#FAFAFA; border:1px solid #EEE; border-radius:6px; padding:10px 12px; }
+    .note { font-size:10.5px; color:${colors.label}; white-space:pre-wrap; line-height:1.7; background:${note.bg}; border:${note.border}; border-radius:${note.radius}; padding:10px 12px; }
     .imgsec { margin-top:14px; }
-    .imgtitle { font-size:11px; font-weight:700; color:#555; margin-bottom:8px; }
+    .imgtitle { font-size:11px; font-weight:700; color:${colors.meta}; margin-bottom:8px; }
     .imggrid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-    .imggrid img { width:100%; height:38mm; object-fit:cover; border-radius:6px; border:1px solid #DDD; }
-    .footer { margin-top:20px; text-align:center; font-size:10px; color:#999; }
+    .imggrid img { width:100%; height:38mm; object-fit:cover; border-radius:${layout.imgRadius}; border:1px solid #DDD; }
+    .footer { margin-top:20px; text-align:center; font-size:10px; color:${colors.footer}; }
   </style></head>
   <body><div class="mid">
     <div class="head">
@@ -545,10 +612,10 @@ function buildBriefHTML(data) {
     </table>
 
     <div class="section-title">간판 제작 항목 (총 ${(signItems || []).length}건)</div>
-    <table class="items">
+    <div class="tablewrap"><table class="items">
       <thead><tr><th style="width:26px">No</th><th>간판 종류</th><th style="width:100px">사이즈</th><th>설치 위치</th><th>주간 효과</th><th>야간 효과</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="6" style="color:#999;padding:16px;">등록된 간판 항목이 없습니다.</td></tr>`}</tbody>
-    </table>
+      <tbody>${rows || `<tr><td colspan="6" style="color:${colors.muted};padding:16px;">등록된 간판 항목이 없습니다.</td></tr>`}</tbody>
+    </table></div>
 
     <div class="section-title">시공 참고사항</div>
     <div class="note">${esc(f.installNote || "특이사항 없음")}</div>
@@ -557,6 +624,30 @@ function buildBriefHTML(data) {
 
     <div class="footer">본 의뢰서는 싸인플러스(Signplus+) 상담 내용을 바탕으로 자동 생성되었습니다.</div>
   </div></body></html>`;
+}
+function buildBriefHTML(data) {
+  return renderDocument(data, briefTemplateFor(data.form && data.form.fontMood));
+}
+/* 견적서 스타일별 미리보기/클립보드 텍스트 — PDF와 같은 BRIEF_TEMPLATES를 공유한다. */
+function renderBriefText(data, template) {
+  const { form: f, signItems, images, companyName } = data;
+  const marker = template.text.marker;
+  return `[${companyName} 시안 제작 의뢰서]
+${template.text.divider || ""}
+${marker} 거래처 : ${f.client || "-"}
+${marker} 업종 : ${f.industry || "-"}
+${marker} 건물/설치 위치 : ${f.location || "-"}
+
+[디자인 방향]
+- 견적서 스타일 : ${f.fontMood}
+
+[간판 제작 항목] (총 ${signItems.length}건)
+${signItems.map((s, idx) => `${idx + 1}. ${s.signType} — ${s.width || "-"}×${s.height || "-"}mm / 위치: ${s.location || "-"}
+   주간: ${s.dayEffect || "특이사항 없음"} / 야간: ${s.nightEffect || "특이사항 없음"}`).join("\n")}
+
+[시공 참고사항]
+${f.installNote || "- 여백 및 고정 방식은 현장 실측 후 확정\n- 소재 두께 및 마감은 표준 사양 기준"}
+${images.length ? `\n[첨부 이미지] ${images.length}장 (앱에 저장됨)` : ""}`;
 }
 
 /* ==================================================================== */
@@ -984,7 +1075,8 @@ function QuoteCalculator(props) {
 /*  2. 시안 의뢰서 생성기                                                  */
 /* ==================================================================== */
 const SIGN_TYPES = ["채널간판 (전면발광)", "채널간판 (후면발광)", "플렉스 간판", "갈바 레이저 타공 간판", "아크릴 간판", "스테인리스 입체 간판", "LED 미디어월", "현수막 / 배너"];
-// 시안 의뢰서 "견적서 스타일" 선택지 — 향후 PDF 템플릿 종류로 쓰일 예정(현재는 값만 저장/표시).
+// 시안 의뢰서 "견적서 스타일" 선택지 — BRIEF_TEMPLATES의 키와 1:1로 대응하며, PDF·미리보기·
+// 클립보드 출력에 실제로 적용된다(renderDocument/renderBriefText 참고).
 const FONT_MOODS = ["기본형", "심플형", "프리미엄형", "공공기관", "기업형"];
 
 function DesignBrief(props) {
@@ -1050,22 +1142,8 @@ function DesignBrief(props) {
   const removeSignItem = (id) => setSignItems((p) => (p.length > 1 ? p.filter((s) => s.id !== id) : p));
   const updateSignItem = (id, k, v) => setSignItems((p) => p.map((s) => (s.id === id ? { ...s, [k]: v } : s)));
 
-  const briefText = `[${companyName} 시안 제작 의뢰서]
-
-■ 거래처 : ${f.client || "-"}
-■ 업종 : ${f.industry || "-"}
-■ 건물/설치 위치 : ${f.location || "-"}
-
-[디자인 방향]
-- 견적서 스타일 : ${f.fontMood}
-
-[간판 제작 항목] (총 ${signItems.length}건)
-${signItems.map((s, idx) => `${idx + 1}. ${s.signType} — ${s.width || "-"}×${s.height || "-"}mm / 위치: ${s.location || "-"}
-   주간: ${s.dayEffect || "특이사항 없음"} / 야간: ${s.nightEffect || "특이사항 없음"}`).join("\n")}
-
-[시공 참고사항]
-${f.installNote || "- 여백 및 고정 방식은 현장 실측 후 확정\n- 소재 두께 및 마감은 표준 사양 기준"}
-${images.length ? `\n[첨부 이미지] ${images.length}장 (앱에 저장됨)` : ""}`;
+  // 미리보기·클립보드 텍스트 — PDF와 동일한 BRIEF_TEMPLATES(견적서 스타일)를 공유한다.
+  const briefText = renderBriefText({ form: f, signItems, images, companyName }, briefTemplateFor(f.fontMood));
   const copy = async () => { try { await navigator.clipboard.writeText(briefText); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {} };
 
   const persist = async (next) => { setSaved(next); await saveKey("sp2-briefs", next); };
@@ -2444,15 +2522,14 @@ function SettingsOutputSection(props) {
   const changeBriefStyle = (v) => { setBriefStyle(v); saveKey("sp2-brief-defaults", { style: v }); };
 
   return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
-    Card(t, { key: "apptheme", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
-      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "테마"),
-      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.lg } }, "앱 전체 화면 테마입니다. 변경하면 즉시 전체 UI에 적용되고 자동으로 저장됩니다."),
-      h("div", { key: "field", style: { maxWidth: 280 } }, Field(t, "테마 선택", Sel(t, { value: props.appTheme, onChange: (e) => props.onChangeAppTheme(e.target.value) }, THEME_IDS.map((id) => ({ value: id, label: THEME_LABELS[id] }))))),
-    ]),
-    Card(t, { key: "brief", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
-      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "시안 의뢰서 기본값"),
-      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.lg } }, "새로 여는 시안 의뢰서에 적용되는 기본 견적서 스타일입니다. 이미 저장된 의뢰서는 그대로 유지됩니다. (향후 PDF 템플릿에 반영될 예정입니다.)"),
-      h("div", { key: "field", style: { maxWidth: 280 } }, Field(t, "견적서 스타일", Sel(t, { value: briefStyle, onChange: (e) => changeBriefStyle(e.target.value) }, FONT_MOODS))),
+    Card(t, { key: "appearance", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "외형"),
+      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.lg } }, "앱 전체 화면 테마와 시안 의뢰서 기본 스타일입니다. 테마는 변경 즉시 전체 UI에 적용되고 자동으로 저장됩니다."),
+      h("div", { key: "fields", style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg, maxWidth: 280 } }, [
+        Field(t, "테마", Sel(t, { value: props.appTheme, onChange: (e) => props.onChangeAppTheme(e.target.value) }, THEME_IDS.map((id) => ({ value: id, label: THEME_LABELS[id] })))),
+        Field(t, "견적서 스타일", Sel(t, { value: briefStyle, onChange: (e) => changeBriefStyle(e.target.value) }, FONT_MOODS)),
+      ]),
+      h("div", { key: "note", style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.md } }, "※ PDF 디자인 템플릿에 적용됩니다."),
     ]),
     Card(t, { key: "pdf", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
       h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "PDF 옵션"),
