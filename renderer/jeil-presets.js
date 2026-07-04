@@ -99,7 +99,7 @@ const JEIL_PRESETS = [
   { cat: "LED", sub: "LED모듈", name: "포유 LED 3구 2835 확산렌즈형 1W", spec: "10000K 국산", unit: "개", price: 180, memo: "1box:2,000ea" },
   { cat: "LED", sub: "LED모듈", name: "보스 LED 3구 2835 백색 확산렌즈형 1W(무극)", spec: "13000K 수입", unit: "개", price: 160, memo: "1box:2,000ea" },
   { cat: "LED", sub: "LED모듈", name: "보스 LED 3구 2835 웜화이트 확산렌즈형 1W(무극)", spec: "3000K 수입", unit: "개", price: 160, memo: "1box:2,000ea" },
-  { cat: "LED", sub: "LED모듈", name: "LED 조립비 (채널 부착)", spec: "모듈 1개당", unit: "개", price: 350, memo: "채널 내부 LED 모듈 부착 인건비" },
+  { cat: "LED", sub: "LED모듈", name: "LED 조립비", spec: "모듈 1개당", unit: "개", price: 170, memo: "채널 내부 LED 모듈 부착 인건비 (모듈+조립 포함가 350원/개)" },
   /* ===== LED 형광등 (EA) ===== */
   { cat: "LED", sub: "LED형광등", name: "넘버원 LED 형광등 20W", spec: "길이1200", unit: "개", price: 1800, memo: "1box:30ea·등조립4,000" },
   { cat: "LED", sub: "LED형광등", name: "넘버원 LED 형광등 20W 웜(전구색)", spec: "길이1200", unit: "개", price: 2500, memo: "1box:30ea" },

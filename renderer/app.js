@@ -1025,7 +1025,7 @@ function QuoteCalculator(props) {
       const [chQty, setChQty] = useState("1"); // 글자 수량 기본값
       const [withAssembly, setWithAssembly] = useState(true); // LED 조립 포함 기본 체크
       const ledModulePrice = 180; // 3구 2835 1W 기본 단가
-      const assemblyPricePerModule = 350; // 조립비 (개당)
+      const assemblyPricePerModule = 170; // LED 조립비 (개당) — 모듈 단가(180)+조립비(170)=LED 포함 350원
       const sizeNum = Number(chSize) || 700;
       // 입력 각수에 가장 가까운 프로필 찾기, 없으면 보간
       const sizes = Object.keys(LED_PER_SIZE).map(Number).sort((a, b) => a - b);
@@ -1063,7 +1063,7 @@ function QuoteCalculator(props) {
           Field(t, "글자 수량", TextInput(t, { type: "number", value: chQty, onChange: (e) => setChQty(e.target.value), placeholder: "3", style: { width: 70, fontFamily: MONO } })),
           h("label", { key: "asm", style: { display: "flex", alignItems: "center", gap: DS.spacing.sm, fontSize: DS.font.size.sm, cursor: "pointer" } }, [
             h("input", { type: "checkbox", checked: withAssembly, onChange: (e) => setWithAssembly(e.target.checked) }),
-            "LED 조립 포함 (350원/개)",
+            "LED 조립 포함 (170원/개)",
           ]),
           h("div", { key: "info", style: { fontFamily: MONO, fontSize: DS.font.size.sm, color: t.ink } }, `모듈 ${totalModules}개 · ${won(totalModuleCost)}${withAssembly ? " + 조립 " + won(totalAssemblyCost) : ""} = ${won(totalModuleCost + totalAssemblyCost)}`),
           Btn(t, { key: "add", variant: "accent", onClick: addLedItems, style: { padding: `${DS.spacing.md}px ${DS.spacing.xl}px` } }, "견적에 추가"),
@@ -1171,12 +1171,23 @@ function migrateQuoteStyle(v) {
 // 따로 두지 않기 위함 — main.js는 이 값을 그대로 쓰기만 하고 스타일을 재정의하지 않는다).
 const EXCEL_FONT_BY_STYLE = { "기본형": "맑은 고딕", "심플형": "맑은 고딕", "프리미엄형": "바탕", "공공기관": "맑은 고딕", "기업형": "맑은 고딕" };
 function hexToArgb(hex) {
-  const h6 = String(hex || "#000000").replace("#", "").padStart(6, "0").slice(0, 6).toUpperCase();
-  return "FF" + h6;
+  // "transparent"/"none" 등 헥스가 아닌 CSS 키워드(예: 심플형의 headerBg)가 올 수 있으므로,
+  // 유효한 #RGB/#RRGGBB 형식이 아니면 흰색으로 안전하게 대체한다(잘못된 ARGB로 엑셀 색이 깨지는 것 방지).
+  const m = String(hex || "").trim().match(/^#?([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/);
+  if (!m) return "FFFFFFFF";
+  let h6 = m[1];
+  if (h6.length === 3) h6 = h6.split("").map((c) => c + c).join("");
+  return "FF" + h6.toUpperCase();
+}
+// CSS 여백 문자열("9px 8px" 등)에서 첫 px 값만 뽑아 엑셀 행 높이 조정에 재사용한다.
+function firstPx(cssPad, fallback) {
+  const m = String(cssPad || "").match(/(\d+(?:\.\d+)?)px/);
+  return m ? parseFloat(m[1]) : fallback;
 }
 function quoteExcelStyleTokens(styleName) {
   const tpl = briefTemplateFor(styleName);
   const headerText = tpl.table.headerColor || tpl.colors.ink;
+  const borderHex = String(tpl.table.cellBorder || "").match(/#[0-9A-Fa-f]{3,6}/);
   return {
     font: EXCEL_FONT_BY_STYLE[styleName] || "맑은 고딕",
     title: hexToArgb(tpl.colors.ink),
@@ -1186,6 +1197,9 @@ function quoteExcelStyleTokens(styleName) {
     tableHeadText: hexToArgb(headerText),
     grand: hexToArgb(tpl.colors.brand),
     bar: hexToArgb(tpl.colors.brand),
+    border: borderHex ? hexToArgb(borderHex[0]) : "FFDDDDDD",
+    rowPad: firstPx(tpl.table.cellPad, 7),
+    headerPad: firstPx(tpl.table.headerPad, 8),
   };
 }
 
@@ -1426,7 +1440,7 @@ function ChannelLedCalc(props) {
   const [density, setDensity] = useState("75"); // 개/㎡
   const [modPrice, setModPrice] = useState("180"); // 모듈 단가
   const [smpsPrice, setSmpsPrice] = useState("15000");
-  const [assemblyPrice, setAssemblyPrice] = useState("350"); // LED 조립비 (개당)
+  const [assemblyPrice, setAssemblyPrice] = useState("170"); // LED 조립비 (개당)
 
   const area = mode === "area"
     ? (Number(areaVal) || 0)
