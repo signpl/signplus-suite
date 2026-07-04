@@ -382,9 +382,8 @@ function buildQuoteHTML(data) {
         <div class="title-bar"></div>
       </div>
       <div class="supplier">
-        <div class="logo-row">
-          ${logo ? `<img src="${logo}"/>` : `<span class="brand-txt">SIGNPLUS<span style="color:#FF6B35;">+</span></span>`}
-        </div>
+        ${logo ? `<div class="logo-row"><img src="${logo}"/></div>` : ""}
+        <div class="brand-txt">${company.name ? esc(company.name) : `SIGNPLUS<span style="color:#FF6B35;">+</span>`}</div>
         ${company.nameEn ? `<div class="name-en">${esc(company.nameEn)}</div>` : ""}
         ${esc(company.addr)}<br>
         TEL. ${esc(company.tel)}${company.fax ? "&nbsp;&nbsp;FAX. " + esc(company.fax) : ""}<br>
@@ -481,7 +480,7 @@ function buildQuoteHTML(data) {
     .supplier { text-align:right; font-size:10.5px; line-height:1.7; color:${colors.label}; min-width:300px; }
     .supplier .logo-row { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:8px; }
     .supplier .logo-row img { max-height:36px; max-width:150px; object-fit:contain; }
-    .supplier .brand-txt { font-size:20px; font-weight:800; letter-spacing:1px; color:${colors.brand}; }
+    .supplier .brand-txt { font-size:16px; font-weight:800; letter-spacing:0.5px; color:${colors.ink}; margin-bottom:6px; }
     .supplier .name-en { font-size:9.5px; color:${colors.muted}; margin-bottom:4px; }
 
     /* 메타(좌) + 합계(우) */
