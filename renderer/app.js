@@ -714,8 +714,6 @@ function QuoteCalculator(props) {
       }
     });
   }, []);
-  const changePdfTheme = (v) => { setPdfTheme(v); saveKey("sp2-pdf-theme", v); };
-
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), m && m.includes("실패") ? 6000 : 2200); };
   const setC = (k) => (e) => setClient((p) => ({ ...p, [k]: e.target.value }));
   const addItem = () => setItems((p) => [...p, { id: uid(), name: "", spec: "", unit: "식", unitPrice: 0, qty: 1, marginOverride: null }]);
@@ -1024,10 +1022,6 @@ function QuoteCalculator(props) {
     // 액션 — 저장/PDF/엑셀 버튼 로직 동일, 스타일만 DS 토큰
     h("div", { key: "act", style: { display: "flex", gap: DS.spacing.lg, flexWrap: "wrap", alignItems: "center" } }, [
       Btn(t, { key: 1, variant: "accent", onClick: handleSave }, [Ico.save({ size: 14 }), " 견적 저장"]),
-      h("div", { key: "theme", style: { display: "flex", alignItems: "center", gap: DS.spacing.sm } }, [
-        h("span", { key: 1, style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.semibold } }, "견적서 테마 (PDF·엑셀 공통)"),
-        Sel(t, { value: pdfTheme, onChange: (e) => changePdfTheme(e.target.value), style: { width: 140, padding: `${DS.spacing.md}px ${DS.spacing.md}px`, fontSize: DS.font.size.sm } }, Object.keys(QUOTE_THEMES).map((k) => ({ value: k, label: QUOTE_THEMES[k].name }))),
-      ]),
       Btn(t, { key: 2, variant: "blue", onClick: handlePdf }, [Ico.pdf({ size: 14 }), " PDF 내보내기"]),
       Btn(t, { key: 3, variant: "ghost", onClick: handleExcel }, [Ico.download({ size: 14 }), " 엑셀 내보내기"]),
       toast && h("span", { key: 4, style: { fontSize: DS.font.size.base, color: toast.includes("실패") ? t.red : t.green, alignSelf: "center", fontWeight: toast.includes("실패") ? DS.font.weight.semibold : DS.font.weight.regular } }, toast),
@@ -2524,17 +2518,13 @@ function SettingsOutputSection(props) {
   return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
     Card(t, { key: "appearance", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
       h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "외형"),
-      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.lg } }, "앱 전체 화면 테마와 시안 의뢰서 기본 스타일입니다. 테마는 변경 즉시 전체 UI에 적용되고 자동으로 저장됩니다."),
+      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.lg } }, "앱 전체 화면 테마, 시안 의뢰서 기본 스타일, 견적 계산기의 PDF·엑셀 내보내기 테마입니다. 앱 테마는 변경 즉시 전체 UI에 적용되고 자동으로 저장됩니다."),
       h("div", { key: "fields", style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg, maxWidth: 280 } }, [
-        Field(t, "테마", Sel(t, { value: props.appTheme, onChange: (e) => props.onChangeAppTheme(e.target.value) }, THEME_IDS.map((id) => ({ value: id, label: THEME_LABELS[id] })))),
+        Field(t, "앱 테마", Sel(t, { value: props.appTheme, onChange: (e) => props.onChangeAppTheme(e.target.value) }, THEME_IDS.map((id) => ({ value: id, label: THEME_LABELS[id] })))),
         Field(t, "견적서 스타일", Sel(t, { value: briefStyle, onChange: (e) => changeBriefStyle(e.target.value) }, FONT_MOODS)),
+        Field(t, "견적계산기 PDF 테마", Sel(t, { value: pdfTheme, onChange: (e) => changePdfTheme(e.target.value) }, Object.keys(QUOTE_THEMES).map((k) => ({ value: k, label: QUOTE_THEMES[k].name })))),
       ]),
-      h("div", { key: "note", style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.md } }, "※ PDF 디자인 템플릿에 적용됩니다."),
-    ]),
-    Card(t, { key: "pdf", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
-      h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "PDF 옵션"),
-      h("div", { key: "sub", style: { fontSize: DS.font.size.sm, color: t.muted, marginBottom: DS.spacing.lg } }, "견적 계산기의 PDF·엑셀 내보내기에 공통으로 적용되는 테마입니다."),
-      h("div", { key: "field", style: { maxWidth: 280 } }, Field(t, "견적서 테마", Sel(t, { value: pdfTheme, onChange: (e) => changePdfTheme(e.target.value) }, Object.keys(QUOTE_THEMES).map((k) => ({ value: k, label: QUOTE_THEMES[k].name }))))),
+      h("div", { key: "note", style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.md } }, "※ 견적서 스타일은 시안 의뢰서 PDF에, 견적계산기 PDF 테마는 견적 계산기의 PDF·엑셀 내보내기에 적용됩니다."),
     ]),
     Card(t, { key: "excel", style: { opacity: 0.65 } }, [
       h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "Excel 옵션"),
