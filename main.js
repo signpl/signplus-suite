@@ -154,9 +154,11 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     ws.getCell(`A${r}`).value = "QUOTATION";
     ws.getCell(`A${r}`).font = F(null, 10.5, false, "FF999999");
     const supLines = [
+      company.nameEn || null,
       company.addr,
       `TEL. ${company.tel}${company.fax ? "   FAX. " + company.fax : ""}`,
       company.email ? `E-mail. ${company.email}` : null,
+      company.homepage ? `Web. ${company.homepage}` : null,
       `사업자등록번호 ${company.biznum}`,
       `대표자 ${company.ceo}`,
     ].filter(Boolean);
@@ -317,11 +319,19 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     ws.getCell(`A${r}`).value = "기타 안내사항";
     ws.getCell(`A${r}`).font = F(null, 11, true);
     r++;
-    (noteArr.length ? noteArr : ["상기 견적은 부가세 포함 금액입니다."]).forEach((n, idx) => {
+    const noteLines = noteArr.length ? noteArr : ["상기 견적은 부가세 포함 금액입니다."];
+    noteLines.forEach((n, idx) => {
       ws.mergeCells(`A${r + idx}:E${r + idx}`);
       ws.getCell(`A${r + idx}`).value = `${idx + 1}. ${n}`;
       ws.getCell(`A${r + idx}`).font = F(null, 10.5, false, "FF555555");
     });
+    r += noteLines.length;
+
+    if (company.bankInfo) {
+      ws.mergeCells(`A${r}:E${r}`);
+      ws.getCell(`A${r}`).value = `입금계좌 : ${company.bankInfo}`;
+      ws.getCell(`A${r}`).font = F(null, 10.5, true, "FF333333");
+    }
 
     const buf = await wb.xlsx.writeBuffer();
 

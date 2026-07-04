@@ -385,9 +385,11 @@ function buildQuoteHTML(data) {
         <div class="logo-row">
           ${logo ? `<img src="${logo}"/>` : `<span class="brand-txt">SIGNPLUS<span style="color:#FF6B35;">+</span></span>`}
         </div>
+        ${company.nameEn ? `<div class="name-en">${esc(company.nameEn)}</div>` : ""}
         ${esc(company.addr)}<br>
         TEL. ${esc(company.tel)}${company.fax ? "&nbsp;&nbsp;FAX. " + esc(company.fax) : ""}<br>
         ${company.email ? "E-mail. " + esc(company.email) + "<br>" : ""}
+        ${company.homepage ? "Web. " + esc(company.homepage) + "<br>" : ""}
         사업자등록번호 ${esc(company.biznum)}<br>
         대표자 ${esc(company.ceo)}
       </div>
@@ -425,6 +427,7 @@ function buildQuoteHTML(data) {
       <div class="notes">
         <div class="hh">기타 안내사항</div>
         ${notesBoxHtml}
+        ${company.bankInfo ? `<div class="bank-line">입금계좌 : ${esc(company.bankInfo)}</div>` : ""}
       </div>
       <div class="sign-box">
         <table class="sign-tbl">
@@ -479,6 +482,7 @@ function buildQuoteHTML(data) {
     .supplier .logo-row { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:8px; }
     .supplier .logo-row img { max-height:36px; max-width:150px; object-fit:contain; }
     .supplier .brand-txt { font-size:20px; font-weight:800; letter-spacing:1px; color:${colors.brand}; }
+    .supplier .name-en { font-size:9.5px; color:${colors.muted}; margin-bottom:4px; }
 
     /* 메타(좌) + 합계(우) */
     .mid { display:flex; justify-content:space-between; gap:20px; margin-bottom:${chrome.midMb}px; }
@@ -524,6 +528,7 @@ function buildQuoteHTML(data) {
     .notes { flex:1; }
     .notes .hh { font-size:11px; font-weight:700; border-left:3px solid ${colors.brand}; padding-left:7px; margin-bottom:9px; }
     .note-box { font-size:10px; color:${colors.label}; line-height:1.85; background:${note.bg}; border:${note.border}; border-radius:${note.radius}; padding:10px 12px; }
+    .bank-line { font-size:10px; color:${colors.label}; margin-top:8px; font-weight:600; }
     .sign-box { width:280px; }
     .sign-tbl { width:100%; border-collapse:collapse; }
     .sign-tbl th { border:1px solid #CCC; background:${table.headerBg}; padding:7px; font-size:10px; font-weight:700; width:50%; color:${tableHeadColor}; }
@@ -680,7 +685,7 @@ function renderDocument(data, template) {
 
     ${imageBlock}
 
-    <div class="footer">본 의뢰서는 싸인플러스(Signplus+) 상담 내용을 바탕으로 자동 생성되었습니다.</div>
+    <div class="footer">본 의뢰서는 ${esc(brandLabel)} 상담 내용을 바탕으로 자동 생성되었습니다.</div>
   </div></body></html>`;
 }
 function buildBriefHTML(data) {
@@ -722,8 +727,8 @@ function QuoteCalculator(props) {
   const [validity, setValidity] = useState("견적일로부터 30일");
   const [note, setNote] = useState("상기 견적은 부가세 포함 금액입니다.\n견적 유효기간 이후 변동될 수 있습니다.\n발주 후 제작이 진행되며, 제작 기간은 별도 협의입니다.\n기타 문의사항은 상단 연락처로 연락 부탁드립니다.");
   const [items, setItems] = useState([{ id: uid(), name: "", spec: "", unit: "식", unitPrice: 0, qty: 1, marginOverride: null }]);
-  const [logo, setLogo] = useState(null);
-  const [stamp, setStamp] = useState(null);
+  const logo = company.logo || null;
+  const stamp = company.stamp || null;
   const [saved, setSaved] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [toast, setToast] = useState("");
@@ -753,7 +758,6 @@ function QuoteCalculator(props) {
 
   useEffect(() => {
     loadKey("sp2-quotes", []).then((v) => { setSaved(v); setLoaded(true); setQuoteNo(genQuoteNo(v)); });
-    loadKey("sp2-brand", {}).then((b) => { if (b.logo) setLogo(b.logo); if (b.stamp) setStamp(b.stamp); });
     loadKey("sp2-pdf-theme", FONT_MOODS[0]).then((v) => setQuoteStyle(migrateQuoteStyle(v)));
     loadKey("sp2-projects", []).then(setProjectsForLink);
     const onProjectsChanged = (e) => {
@@ -801,10 +805,10 @@ function QuoteCalculator(props) {
   const baseSubtotal = items.reduce((s, i) => s + baseLineTotal(i), 0);
   const marginAmount = subtotal - baseSubtotal;
 
-  const pickLogo = async () => { const d = await window.api.pickImage(); if (d) { setLogo(d); const b = await loadKey("sp2-brand", {}); await saveKey("sp2-brand", { ...b, logo: d }); flash("로고 저장됨"); } };
-  const pickStamp = async () => { const d = await window.api.pickImage(); if (d) { setStamp(d); const b = await loadKey("sp2-brand", {}); await saveKey("sp2-brand", { ...b, stamp: d }); flash("도장 저장됨"); } };
-  const clearLogo = async () => { setLogo(null); const b = await loadKey("sp2-brand", {}); delete b.logo; await saveKey("sp2-brand", b); };
-  const clearStamp = async () => { setStamp(null); const b = await loadKey("sp2-brand", {}); delete b.stamp; await saveKey("sp2-brand", b); };
+  const pickLogo = async () => { const d = await window.api.pickImage(); if (d) { await props.onSaveCompany({ ...company, logo: d }); flash("로고 저장됨"); } };
+  const pickStamp = async () => { const d = await window.api.pickImage(); if (d) { await props.onSaveCompany({ ...company, stamp: d }); flash("도장 저장됨"); } };
+  const clearLogo = async () => { await props.onSaveCompany({ ...company, logo: "" }); };
+  const clearStamp = async () => { await props.onSaveCompany({ ...company, stamp: "" }); };
 
   const handleSave = async () => {
     const rec = { id: editingId || uid(), quoteNo, client, projectName, quoteDate, validity, note, items, marginRate, subtotal, vat, total, baseSubtotal, marginAmount, status: quoteStatus, vendorId: selectedVendor, projectId: linkedProjectId || null, savedAt: new Date().toISOString() };
@@ -2279,7 +2283,7 @@ function ProjectDashboard(props) {
 /* ==================================================================== */
 // 회사정보는 시스템 기본값이 아니라 사용자 데이터이므로, 저장된 값이 없는 최초 실행 시
 // 데모/샘플 값을 채우지 않고 빈 값으로 시작한다(사용자가 직접 입력).
-const DEFAULT_COMPANY = { name: "", biznum: "", ceo: "", addr: "", tel: "", fax: "", email: "", homepage: "" };
+const DEFAULT_COMPANY = { name: "", nameEn: "", biznum: "", ceo: "", addr: "", tel: "", fax: "", email: "", homepage: "", logo: "", stamp: "", bankInfo: "" };
 
 /* ==================================================================== */
 /*  루트                                                                 */
@@ -2532,7 +2536,7 @@ function AdminLicensePanel(props) {
 /* ==================================================================== */
 /*  설정 페이지 — 회사정보/출력설정/프로그램설정/라이선스를 좌측 내비게이션이   */
 /*  있는 화면 하나로 통합한다. 각 섹션은 기존 컴포넌트가 쓰던 저장 키를        */
-/*  그대로 읽고 쓸 뿐(sp2-company/sp2-brand/sp2-pdf-theme/sp2-vendors 등),   */
+/*  그대로 읽고 쓸 뿐(sp2-company/sp2-pdf-theme/sp2-vendors 등),             */
 /*  검증·계산·IPC 로직은 새로 만들지 않는다(UI/구조 리팩터링 전용).           */
 /* ==================================================================== */
 const SETTINGS_SECTIONS = [
@@ -2575,21 +2579,19 @@ function SettingsPage(props) {
 function SettingsCompanySection(props) {
   const t = props.theme;
   const [c, setC] = useState(props.company);
-  const [logo, setLogo] = useState(null);
-  const [stamp, setStamp] = useState(null);
   const [saved, setSaved] = useState(false);
   const set = (k) => (e) => setC((p) => ({ ...p, [k]: e.target.value }));
+  const logo = c.logo || null;
+  const stamp = c.stamp || null;
 
   useEffect(() => { setC(props.company); }, [props.company]);
-  useEffect(() => { loadKey("sp2-brand", {}).then((b) => { if (b.logo) setLogo(b.logo); if (b.stamp) setStamp(b.stamp); }); }, []);
 
   const save = () => { props.onSaveCompany(c); setSaved(true); setTimeout(() => setSaved(false), 2000); };
-  // 로고/도장 로직은 기존 견적 계산기(QuoteCalculator)의 pickLogo/pickStamp/clearLogo/clearStamp와
-  // 완전히 동일하다 — 같은 sp2-brand 키를 읽고 쓸 뿐, 검증/저장 방식은 새로 만들지 않았다.
-  const pickLogo = async () => { const d = await window.api.pickImage(); if (d) { setLogo(d); const b = await loadKey("sp2-brand", {}); await saveKey("sp2-brand", { ...b, logo: d }); } };
-  const pickStamp = async () => { const d = await window.api.pickImage(); if (d) { setStamp(d); const b = await loadKey("sp2-brand", {}); await saveKey("sp2-brand", { ...b, stamp: d }); } };
-  const clearLogo = async () => { setLogo(null); const b = await loadKey("sp2-brand", {}); delete b.logo; await saveKey("sp2-brand", b); };
-  const clearStamp = async () => { setStamp(null); const b = await loadKey("sp2-brand", {}); delete b.stamp; await saveKey("sp2-brand", b); };
+  // 로고/직인은 텍스트 필드와 달리 선택 즉시 회사정보(sp2-company)에 저장한다(기존 UX 유지).
+  const pickLogo = async () => { const d = await window.api.pickImage(); if (d) { const next = { ...c, logo: d }; setC(next); await props.onSaveCompany(next); } };
+  const pickStamp = async () => { const d = await window.api.pickImage(); if (d) { const next = { ...c, stamp: d }; setC(next); await props.onSaveCompany(next); } };
+  const clearLogo = async () => { const next = { ...c, logo: "" }; setC(next); await props.onSaveCompany(next); };
+  const clearStamp = async () => { const next = { ...c, stamp: "" }; setC(next); await props.onSaveCompany(next); };
 
   return Card(t, { style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
     h("div", { key: "title", style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink, marginBottom: DS.spacing.xs } }, "회사정보"),
@@ -2599,6 +2601,7 @@ function SettingsCompanySection(props) {
         Field(t, "회사명", TextInput(t, { value: c.name, onChange: set("name"), placeholder: "Signplus+" })),
         Field(t, "대표자", TextInput(t, { value: c.ceo, onChange: set("ceo"), placeholder: "홍길동" })),
       ]),
+      Field(t, "영문회사명", TextInput(t, { value: c.nameEn || "", onChange: set("nameEn"), placeholder: "Signplus Co., Ltd." })),
       Field(t, "사업자번호", TextInput(t, { value: c.biznum, onChange: set("biznum"), placeholder: "123-45-67890" })),
       Field(t, "주소", TextInput(t, { value: c.addr, onChange: set("addr"), placeholder: "강원특별자치도 춘천시 ○○로 123" })),
       h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
@@ -2607,6 +2610,7 @@ function SettingsCompanySection(props) {
       ]),
       Field(t, "이메일", TextInput(t, { value: c.email, onChange: set("email"), placeholder: "signplus@naver.com" })),
       Field(t, "홈페이지", TextInput(t, { value: c.homepage || "", onChange: set("homepage"), placeholder: "https://" })),
+      Field(t, "계좌정보", TextInput(t, { value: c.bankInfo || "", onChange: set("bankInfo"), placeholder: "국민은행 123456-78-901234 (예금주: 홍길동)" })),
       h("div", { key: 3, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
         Field(t, "회사 로고", h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center" } }, [
           Btn(t, { variant: "ghost", onClick: pickLogo }, [Ico.image({ size: 14 }), logo ? " 로고 변경" : " 로고 등록"]),
@@ -2732,7 +2736,14 @@ function App() {
     (async () => {
       const m = await loadKey("sp2-theme", "light");
       const pr = await loadKey("sp2-presets", MATERIAL_PRESETS);
-      const co = await loadKey("sp2-company", DEFAULT_COMPANY);
+      let co = await loadKey("sp2-company", DEFAULT_COMPANY);
+      // 로고/직인은 과거 별도 키(sp2-brand)에 저장돼 있었다 — 회사정보를 단일 설정으로 통합하면서
+      // 아직 sp2-company에 로고/직인이 없는 사용자는 1회성으로 옮겨온다(sp2-brand 원본은 안전망으로 유지).
+      const legacyBrand = await loadKey("sp2-brand", {});
+      if ((legacyBrand.logo && !co.logo) || (legacyBrand.stamp && !co.stamp)) {
+        co = { ...co, logo: co.logo || legacyBrand.logo || "", stamp: co.stamp || legacyBrand.stamp || "" };
+        await saveKey("sp2-company", co);
+      }
       const pl = await loadKey("sp2-preset-label", "제일에코");
       const vd = await loadKey("sp2-vendors", [{ id: "jeil", name: "제일에코", isDefault: true }]);
       setMode(m); setPresets(pr && pr.length ? pr : MATERIAL_PRESETS); setCompany(co); setPresetLabel(pl);
@@ -2875,7 +2886,7 @@ function App() {
     ]),
     // 콘텐츠
     h("div", { key: "main", style: { flex: 1, padding: DS.spacing.xxxl + DS.spacing.xs, overflowY: "auto" } }, [
-      tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, presetLabel, vendors, loadVendorPresets, openQuoteId, onOpenQuoteHandled: () => setOpenQuoteId(null) }),
+      tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, onSaveCompany: saveCompany, presetLabel, vendors, loadVendorPresets, openQuoteId, onOpenQuoteHandled: () => setOpenQuoteId(null) }),
       tab === "brief" && h(DesignBrief, { key: "b", theme: t, company }),
       tab === "led" && h(LedCalculator, { key: "l", theme: t }),
       tab === "dashboard" && h(ProjectDashboard, { key: "d", theme: t, onOpenQuote: openQuoteInCalculator }),
