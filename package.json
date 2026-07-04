@@ -1,6 +1,6 @@
 {
   "name": "signplus-suite",
-  "version": "3.9.0",
+  "version": "3.9.2",
   "description": "Signplus+ 통합 업무 툴 - 견적/시안의뢰서/LED계산기/대시보드/거래처·단가 DB",
   "main": "main.js",
   "author": "Signplus+",

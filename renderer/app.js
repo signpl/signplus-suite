@@ -291,26 +291,41 @@ function IconBtn(t, icon, onClick, color) {
 }
 
 /* ==================================================================== */
-/*  견적서 PDF용 HTML 생성 (SIGNPLUS 정식 양식 · A4 1장 맞춤)              */
+/*  견적서 PDF용 HTML 생성 (SIGNPLUS 정식 양식 · A4, 필요 시 자동 여러 장)     */
+/*  시안의뢰서(renderDocument)와 동일한 BRIEF_TEMPLATES 5종 스타일 토큰을      */
+/*  그대로 재사용한다 — 색상/폰트/표 스타일을 이 함수 안에 따로 하드코딩하지     */
+/*  않는다(briefTemplateFor 참고).                                         */
 /* ==================================================================== */
-/* 견적서 PDF 테마 팔레트 */
-const QUOTE_THEMES = {
-  classic: { name: "클래식 화이트", titleColor: "#1D1D1F", headBg: "#F3F3F3", headText: "#1D1D1F", tableHeadBg: "#F3F3F3", tableHeadText: "#333333", grandBorder: "#333333", barColor: "#222222", closingColor: "#1D1D1F" },
-  navy: { name: "네이비 골드", titleColor: "#0B1F3A", headBg: "#0B1F3A", headText: "#FFFFFF", tableHeadBg: "#EEF1F6", tableHeadText: "#0B1F3A", grandBorder: "#0B1F3A", barColor: "#C9A24B", closingColor: "#0B1F3A" },
-  charcoal: { name: "차콜 오렌지", titleColor: "#1D1D1F", headBg: "#1D1D1F", headText: "#FFFFFF", tableHeadBg: "#FFF1E8", tableHeadText: "#1D1D1F", grandBorder: "#1D1D1F", barColor: "#FF6B35", closingColor: "#FF6B35" },
-};
-
 function buildQuoteHTML(data) {
   const { company, client, quoteNo, quoteDate, validity, items, subtotal, vat, total, logo, stamp, notes } = data;
-  const theme = QUOTE_THEMES[data.theme] || QUOTE_THEMES.classic;
+  const template = briefTemplateFor(data.theme);
+  const { font, heading, table, colors, note, layout } = template;
+  const tableHeadColor = table.headerColor || colors.ink;
 
   // 품목이 적으면 빈 행으로 채워 정형 유지(단일 페이지). 많으면 페이지를 나눠 잘리지 않게 한다.
   const realItems = items.filter((i) => i.name || i.spec || (Number(i.unitPrice) || 0) * (Number(i.qty) || 0));
   const displayItems = realItems.length ? realItems : items;
   const MIN_ROWS = 6;          // 최소 표시 행(빈 행 포함, 단일 페이지에서만 적용)
-  const FIRST_PAGE_ROWS = 12;  // 1페이지 수용량 — 상단 로고/메타/합계 박스 포함(기존 1장 설계와 동일)
-  const CONT_PAGE_ROWS = 24;   // 중간 페이지 수용량 — 품목표만(헤더 반복), 여유있게 보수적으로 설정
-  const LAST_PAGE_ROWS = 18;   // 마지막 페이지 수용량 — 품목표 + 합계/비고/서명 포함, 여유있게 보수적으로 설정
+
+  // 품목 수에 따라 표를 자연스럽게 압축해, 1페이지에 들어갈 수 있으면 최대한 1페이지를 유지하고
+  // (부자연스러운 과압축은 피함) 정말 다 안 들어갈 때만 다음 페이지로 넘긴다.
+  const n = displayItems.length;
+  const density = n <= 12 ? "normal" : n <= 20 ? "compact" : "dense";
+  const rowCellPad = density === "normal" ? table.cellPad : density === "compact" ? "5px 6px" : "3px 6px";
+  const rowFontSize = density === "normal" ? "10px" : density === "compact" ? "9.5px" : "8.5px";
+  const emptyRowH = density === "normal" ? 26 : density === "compact" ? 20 : 14;
+  // 1페이지/중간/마지막 페이지 수용량 — 실제 인쇄 렌더링으로 검증된 값만 사용한다. "dense" 폰트/여백은
+  // 시각적으로 더 촘촘하지만, 헤더+메타+합계+서명까지 포함한 총 높이는 여전히 "compact"와 같은 실측
+  // 안전 수치를 넘지 못하므로(더 큰 값은 실측 결과 넘침) 페이지 배분은 compact와 동일하게 보수적으로 둔다.
+  const FIRST_PAGE_ROWS = density === "normal" ? 12 : 20;  // 1페이지 수용량(로고/메타/합계 박스 포함)
+  const CONT_PAGE_ROWS = density === "normal" ? 24 : 34;   // 중간 페이지 수용량(품목표만, 헤더 반복)
+  const LAST_PAGE_ROWS = density === "normal" ? 18 : 26;   // 마지막 페이지 수용량(품목표 + 합계/비고/서명)
+  // 품목이 많을 때는 상/하단 여백도 자연스럽게 살짝 줄여 표에 더 많은 공간을 준다(폰트 크기는 표만 압축).
+  const chrome = density === "normal"
+    ? { topMb: 18, midMb: 16, footMb: 20, closeMt: 24, metaPad: "4px 0", sumRowPad: "7px 14px", sumHeadPad: "9px 14px" }
+    : density === "compact"
+    ? { topMb: 13, midMb: 11, footMb: 14, closeMt: 16, metaPad: "3px 0", sumRowPad: "5px 12px", sumHeadPad: "7px 12px" }
+    : { topMb: 8, midMb: 7, footMb: 9, closeMt: 8, metaPad: "2px 0", sumRowPad: "4px 10px", sumHeadPad: "5px 10px" };
 
   const isMultiPage = displayItems.length > FIRST_PAGE_ROWS;
   let itemPages;
@@ -345,6 +360,7 @@ function buildQuoteHTML(data) {
   const notesHtml = (noteArr.length ? noteArr : ["상기 견적은 부가세 포함 금액입니다."])
     .map((s, i) => `<div class="note-line">${i + 1}. ${esc(s)}</div>`)
     .join("");
+  const notesBoxHtml = `<div class="note-box">${notesHtml}</div>`;
 
   // 품목표 헤더 — 페이지가 나뉘어도 매 페이지 반복
   const tableHeadHtml = `<thead><tr>
@@ -394,8 +410,11 @@ function buildQuoteHTML(data) {
       </div>
     </div>`;
 
-  // 합계행/기타 안내사항/서명란/맺음말 — 마지막 페이지에만 표시
+  // 합계행/기타 안내사항/서명란/맺음말 — 마지막 페이지에만 표시. 페이지 배분이 실제 렌더링 높이와
+  // 미세하게 어긋나 자연스럽게 다음 페이지로 넘어가는 경우에도, 이 블록 전체가 중간에 잘리지 않고
+  // 통째로 다음 페이지로 넘어가도록 page-break-inside:avoid로 감싼다.
   const tailHtml = `
+    <div class="tail-block">
     <table class="foot-tbl"><tbody>
       <tr><td class="lbl">합 계 (VAT 별도)</td><td class="amt">${num(subtotal)}</td><td class="pad"></td></tr>
       <tr><td class="lbl">부 가 세 (10%)</td><td class="amt">${num(vat)}</td><td></td></tr>
@@ -405,7 +424,7 @@ function buildQuoteHTML(data) {
     <div class="bottom">
       <div class="notes">
         <div class="hh">기타 안내사항</div>
-        ${notesHtml}
+        ${notesBoxHtml}
       </div>
       <div class="sign-box">
         <table class="sign-tbl">
@@ -421,6 +440,7 @@ function buildQuoteHTML(data) {
     <div class="closing">
       <div class="msg">견적 요청에 감사드리며, 귀사의 무궁한 발전을 기원합니다.</div>
       <div class="nm">${esc(company.name)}</div>
+    </div>
     </div>`;
 
   let runningNo = 0;
@@ -437,7 +457,7 @@ function buildQuoteHTML(data) {
     }
     return `<div class="doc-page">
       ${isFirst ? topMidHtml : ""}
-      <table class="items">${tableHeadHtml}<tbody>${rowsHtml}</tbody></table>
+      <div class="tablewrap"><table class="items">${tableHeadHtml}<tbody>${rowsHtml}</tbody></table></div>
       ${isLast ? tailHtml : ""}
     </div>`;
   }).join("");
@@ -446,72 +466,74 @@ function buildQuoteHTML(data) {
     @page { size: A4; margin: 0; }
     * { margin:0; padding:0; box-sizing:border-box; }
     html, body { width:210mm; }
-    body { font-family:-apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; color:#222; font-size:10px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .doc-page { width:210mm; min-height:297mm; padding:14mm 13mm; page-break-after:always; }
+    body { font-family:${font}; color:${colors.ink}; font-size:10px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .doc-page { width:210mm; min-height:297mm; padding:${layout.pageMargin}; page-break-after:always; }
     .doc-page:last-child { page-break-after:auto; }
 
     /* 헤더 */
-    .top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
-    .title-ko { font-size:36px; font-weight:800; letter-spacing:12px; line-height:1; color:${theme.titleColor}; }
-    .title-en { font-size:12px; letter-spacing:7px; color:#999; margin-top:7px; }
-    .title-bar { width:40px; height:3px; background:${theme.barColor}; margin-top:11px; }
-    .supplier { text-align:right; font-size:10.5px; line-height:1.7; color:#333; min-width:300px; }
+    .top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:${chrome.topMb}px; }
+    .title-ko { font-size:36px; font-weight:${heading.weight}; letter-spacing:${heading.letterSpacing}; line-height:1; color:${colors.ink}; }
+    .title-en { font-size:12px; letter-spacing:7px; color:${colors.muted}; margin-top:7px; }
+    .title-bar { width:40px; height:3px; background:${colors.brand}; margin-top:11px; }
+    .supplier { text-align:right; font-size:10.5px; line-height:1.7; color:${colors.label}; min-width:300px; }
     .supplier .logo-row { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:8px; }
     .supplier .logo-row img { max-height:36px; max-width:150px; object-fit:contain; }
-    .supplier .brand-txt { font-size:20px; font-weight:800; letter-spacing:1px; }
+    .supplier .brand-txt { font-size:20px; font-weight:800; letter-spacing:1px; color:${colors.brand}; }
 
     /* 메타(좌) + 합계(우) */
-    .mid { display:flex; justify-content:space-between; gap:20px; margin-bottom:16px; }
+    .mid { display:flex; justify-content:space-between; gap:20px; margin-bottom:${chrome.midMb}px; }
     .meta-tbl { border-collapse:collapse; }
-    .meta-tbl td { padding:4px 0; font-size:10.5px; vertical-align:middle; }
-    .meta-tbl .k { color:#333; font-weight:700; letter-spacing:1px; width:64px; padding-right:14px; white-space:nowrap; }
-    .meta-tbl .v { color:#111; white-space:nowrap; }
+    .meta-tbl td { padding:${chrome.metaPad}; font-size:10.5px; vertical-align:middle; }
+    .meta-tbl .k { color:${colors.label}; font-weight:700; letter-spacing:1px; width:64px; padding-right:14px; white-space:nowrap; }
+    .meta-tbl .v { color:${colors.ink}; white-space:nowrap; }
     .summary { width:330px; border:1px solid #DDD; align-self:flex-start; }
-    .summary .row { display:flex; justify-content:space-between; align-items:center; padding:7px 14px; }
-    .summary .row.head { background:${theme.headBg}; padding:9px 14px; }
+    .summary .row { display:flex; justify-content:space-between; align-items:center; padding:${chrome.sumRowPad}; }
+    .summary .row.head { background:${table.headerBg}; padding:${chrome.sumHeadPad}; }
     .summary .row + .row { border-top:1px solid #EEE; }
-    .summary .lbl { font-size:11px; font-weight:600; letter-spacing:0.5px; color:#333; white-space:nowrap; }
-    .summary .head .lbl { font-weight:700; color:${theme.headText}; }
-    .summary .head .amt { font-size:19px; font-weight:800; color:${theme.headText}; }
+    .summary .lbl { font-size:11px; font-weight:600; letter-spacing:0.5px; color:${colors.label}; white-space:nowrap; }
+    .summary .head .lbl { font-weight:700; color:${tableHeadColor}; }
+    .summary .head .amt { font-size:19px; font-weight:800; color:${tableHeadColor}; }
     .summary .amt { font-size:12.5px; font-weight:600; }
 
     /* 품목 테이블 */
+    .tablewrap { border-radius:${table.radius}; overflow:hidden; }
     table.items { width:100%; border-collapse:collapse; }
-    table.items th { background:${theme.tableHeadBg}; border-top:2px solid ${theme.titleColor}; border-bottom:1px solid #CCC; padding:8px 5px; font-size:10px; font-weight:700; color:${theme.tableHeadText}; }
-    table.items td { border-bottom:1px solid #EEE; padding:7px 7px; font-size:10px; }
+    table.items th { background:${table.headerBg}; border-top:2px solid ${colors.brand}; border-bottom:${table.headerBorder}; padding:${table.headerPad}; font-size:10px; font-weight:700; color:${tableHeadColor}; ${table.headerUnderline ? `border-bottom:${table.headerUnderline};` : ""} }
+    table.items td { border-bottom:${table.cellBorder}; padding:${rowCellPad}; font-size:${rowFontSize}; }
     table.items tr { page-break-inside:avoid; break-inside:avoid; }
-    table.items tr.empty td { height:26px; }
+    table.items tr.empty td { height:${emptyRowH}px; }
     table.items .l { text-align:left; }
     table.items .c { text-align:center; }
     table.items .r { text-align:right; }
     table.items .b { font-weight:600; }
-    table.items .num { color:#666; }
-    table.items .spec { color:#555; font-size:9.5px; line-height:1.4; white-space:pre-line; }
+    table.items .num { color:${colors.muted}; }
+    table.items .spec { color:${colors.label}; font-size:9.5px; line-height:1.4; white-space:pre-line; }
 
     /* 합계행 */
-    .foot-tbl { width:100%; border-collapse:collapse; margin-bottom:20px; }
+    .tail-block { page-break-inside:avoid; break-inside:avoid; }
+    .foot-tbl { width:100%; border-collapse:collapse; margin-bottom:${chrome.footMb}px; }
     .foot-tbl td { padding:7px 7px; font-size:10.5px; }
-    .foot-tbl .lbl { text-align:right; letter-spacing:1px; color:#333; }
+    .foot-tbl .lbl { text-align:right; letter-spacing:1px; color:${colors.label}; }
     .foot-tbl .amt { text-align:right; width:130px; font-weight:600; }
     .foot-tbl .pad { width:80px; }
-    .foot-tbl .grand td { border-top:2px solid ${theme.grandBorder}; font-weight:800; font-size:12px; }
-    .foot-tbl .grand .amt { font-size:14px; color:${theme.titleColor}; }
+    .foot-tbl .grand td { border-top:2px solid ${colors.brand}; font-weight:800; font-size:12px; }
+    .foot-tbl .grand .amt { font-size:14px; color:${colors.brand}; }
 
     /* 하단 */
     .bottom { display:flex; justify-content:space-between; gap:24px; }
     .notes { flex:1; }
-    .notes .hh { font-size:11px; font-weight:700; border-left:3px solid ${theme.barColor}; padding-left:7px; margin-bottom:9px; }
-    .note-line { font-size:10px; color:#444; line-height:1.85; }
+    .notes .hh { font-size:11px; font-weight:700; border-left:3px solid ${colors.brand}; padding-left:7px; margin-bottom:9px; }
+    .note-box { font-size:10px; color:${colors.label}; line-height:1.85; background:${note.bg}; border:${note.border}; border-radius:${note.radius}; padding:10px 12px; }
     .sign-box { width:280px; }
     .sign-tbl { width:100%; border-collapse:collapse; }
-    .sign-tbl th { border:1px solid #CCC; background:${theme.tableHeadBg}; padding:7px; font-size:10px; font-weight:700; width:50%; color:${theme.tableHeadText}; }
+    .sign-tbl th { border:1px solid #CCC; background:${table.headerBg}; padding:7px; font-size:10px; font-weight:700; width:50%; color:${tableHeadColor}; }
     .sign-tbl td { border:1px solid #CCC; height:66px; position:relative; }
     .sign-tbl .stamp { position:absolute; right:50%; top:50%; transform:translate(50%,-50%); max-height:56px; max-width:74px; opacity:0.92; }
     .sign-tbl .writer { text-align:center; font-size:11px; padding-top:24px; font-weight:600; }
 
-    .closing { text-align:center; margin-top:24px; }
-    .closing .msg { font-size:10.5px; color:#555; }
-    .closing .nm { font-size:13px; font-weight:800; letter-spacing:2px; margin-top:6px; color:${theme.closingColor}; }
+    .closing { text-align:center; margin-top:${chrome.closeMt}px; }
+    .closing .msg { font-size:10.5px; color:${colors.meta}; }
+    .closing .nm { font-size:13px; font-weight:800; letter-spacing:2px; margin-top:6px; color:${colors.brand}; }
   </style></head><body>
     ${pagesHtml}
   </body></html>`;
@@ -711,7 +733,8 @@ function QuoteCalculator(props) {
   const [expandedSubs, setExpandedSubs] = useState({}); // { "cat|sub": true }
   const [savedSearch, setSavedSearch] = useState("");
   const [marginRate, setMarginRate] = useState(0); // 0~1000 (%)
-  const [pdfTheme, setPdfTheme] = useState("classic");
+  const [quoteStyle, setQuoteStyle] = useState(FONT_MOODS[0]); // 견적 스타일(기본형/심플형/프리미엄형/공공기관/기업형) — PDF·미리보기·엑셀이 공유
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [quoteStatus, setQuoteStatus] = useState("상담중"); // 견적/프로젝트/KPI 공용 상태(STATUSES) 사용 — 상담중/견적발송/계약/시공중/완료
   const [editingId, setEditingId] = useState(null);
   const [selectedVendor, setSelectedVendor] = useState("jeil"); // 거래처 ID
@@ -731,7 +754,7 @@ function QuoteCalculator(props) {
   useEffect(() => {
     loadKey("sp2-quotes", []).then((v) => { setSaved(v); setLoaded(true); setQuoteNo(genQuoteNo(v)); });
     loadKey("sp2-brand", {}).then((b) => { if (b.logo) setLogo(b.logo); if (b.stamp) setStamp(b.stamp); });
-    loadKey("sp2-pdf-theme", "classic").then(setPdfTheme);
+    loadKey("sp2-pdf-theme", FONT_MOODS[0]).then((v) => setQuoteStyle(migrateQuoteStyle(v)));
     loadKey("sp2-projects", []).then(setProjectsForLink);
     const onProjectsChanged = (e) => {
       if (e && e.detail && e.detail.key === "sp2-projects") loadKey("sp2-projects", []).then(setProjectsForLink);
@@ -750,6 +773,16 @@ function QuoteCalculator(props) {
       }
     });
   }, []);
+  const changeQuoteStyle = (v) => { setQuoteStyle(v); saveKey("sp2-pdf-theme", v); };
+  // 견적 스타일 토큰 — 시안의뢰서(BRIEF_TEMPLATES)와 동일한 시스템을 그대로 재사용해 카드/표/버튼/합계/
+  // 타이포그래피/여백을 선택 즉시 다시 스타일링한다(별도 테마 정의를 새로 만들지 않음).
+  const quoteTemplate = briefTemplateFor(quoteStyle);
+  const qAccent = quoteTemplate.colors.brand;
+  const qHeadBg = quoteTemplate.table.headerBg;
+  const qHeadText = quoteTemplate.table.headerColor || quoteTemplate.colors.ink;
+  const qFont = quoteTemplate.font;
+  const qCellPad = quoteTemplate.table.cellPad;
+
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), m && m.includes("실패") ? 6000 : 2200); };
   const setC = (k) => (e) => setClient((p) => ({ ...p, [k]: e.target.value }));
   const addItem = () => setItems((p) => [...p, { id: uid(), name: "", spec: "", unit: "식", unitPrice: 0, qty: 1, marginOverride: null }]);
@@ -800,7 +833,7 @@ function QuoteCalculator(props) {
   // 견적서(PDF·엑셀)에는 원가가 아닌 마진 반영된 판매단가로 출력
   const exportItems = () => items.map((i) => ({ ...i, unitPrice: sellPrice(i) }));
   const handleExcel = async () => {
-    const quote = { company, client, quoteNo, quoteDate, validity, items: exportItems(), subtotal, vat, total, notes: note, theme: pdfTheme };
+    const quote = { company, client, quoteNo, quoteDate, validity, items: exportItems(), subtotal, vat, total, notes: note, theme: quoteStyle, styleTokens: quoteExcelStyleTokens(quoteStyle) };
     try {
       const res = await window.api.exportExcel(quote, (client.name || projectName || "견적서") + "_" + quoteNo);
       if (res && res.ok) flash("엑셀 저장 완료");
@@ -811,7 +844,7 @@ function QuoteCalculator(props) {
     }
   };
   const handlePdf = async () => {
-    const html = buildQuoteHTML({ company, client, quoteNo, quoteDate, validity, items: exportItems(), subtotal, vat, total, logo, stamp, notes: note, theme: pdfTheme });
+    const html = buildQuoteHTML({ company, client, quoteNo, quoteDate, validity, items: exportItems(), subtotal, vat, total, logo, stamp, notes: note, theme: quoteStyle });
     try {
       const res = await window.api.exportPdf(html, (client.name || projectName || "견적서") + "_" + quoteNo);
       if (res && res.ok) flash("PDF 저장 완료");
@@ -822,7 +855,7 @@ function QuoteCalculator(props) {
     }
   };
 
-  const th = (label, w, align) => h("th", { key: label, style: { padding: `${DS.spacing.sm}px ${DS.spacing.md}px`, width: w, textAlign: align || "left", color: t.muted, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, textTransform: "uppercase", letterSpacing: 0.4 } }, label);
+  const th = (label, w, align) => h("th", { key: label, style: { padding: `${DS.spacing.sm}px ${DS.spacing.md}px`, width: w, textAlign: align || "left", background: qHeadBg, color: qHeadText, fontFamily: qFont, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, textTransform: "uppercase", letterSpacing: 0.4 } }, label);
 
   return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
     SectionTitle(t, "견적 계산기", "수신처·품목을 입력하면 정식 견적서 PDF(로고·도장 포함)로 출력됩니다.",
@@ -956,20 +989,20 @@ function QuoteCalculator(props) {
         h("div", { key: 3 }, [h("span", { key: 1, style: { color: t.muted } }, "판매 공급가 "), h("span", { key: 2, style: { fontFamily: MONO, fontWeight: DS.font.weight.bold, color: t.ink } }, won(subtotal))]),
       ]),
     ]),
-    // 품목 테이블 — 프리미엄 보더/섀도우 + DS 토큰 (계산 로직/핸들러 동일)
-    Card(t, { key: "tbl", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+    // 품목 테이블 — 프리미엄 보더/섀도우 + DS 토큰 (계산 로직/핸들러 동일), 견적 스타일 토큰으로 헤더/여백만 재스타일링
+    Card(t, { key: "tbl", style: { borderTop: `3px solid ${qAccent}`, boxShadow: DS.shadow.sm } }, [
       h("div", { key: 1, style: { overflowX: "auto" } }, [
-        h("table", { key: 1, style: { width: "100%", borderCollapse: "collapse", fontSize: DS.font.size.base } }, [
-          h("thead", { key: 1 }, h("tr", {}, [th("품목명"), th("규격 / 사양", 140), th("수량", 60), th("단위", 60), th("원가(단가)", 100, "left"), th("개별마진%", 90, "center"), th("판매단가", 100, "right"), th("금액", 110, "right"), h("th", { key: "z", style: { width: 32 } })])),
+        h("table", { key: 1, style: { width: "100%", borderCollapse: "collapse", fontSize: DS.font.size.base, fontFamily: qFont } }, [
+          h("thead", { key: 1 }, h("tr", {}, [th("품목명"), th("규격 / 사양", 140), th("수량", 60), th("단위", 60), th("원가(단가)", 100, "left"), th("개별마진%", 90, "center"), th("판매단가", 100, "right"), th("금액", 110, "right"), h("th", { key: "z", style: { width: 32, background: qHeadBg } })])),
           h("tbody", { key: 2 }, items.map((i) => {
             const overridden = !(i.marginOverride === null || i.marginOverride === undefined || i.marginOverride === "");
             return h("tr", { key: i.id, style: { borderTop: `1px solid ${t.divider}` } }, [
-            h("td", { key: 1, style: { padding: DS.spacing.sm } }, TextInput(t, { value: i.name, onChange: (e) => updateItem(i.id, "name", e.target.value), placeholder: "채널 간판" })),
-            h("td", { key: 2, style: { padding: DS.spacing.sm } }, TextInput(t, { value: i.spec, onChange: (e) => updateItem(i.id, "spec", e.target.value), placeholder: "LED 채널 / W3000×H600" })),
-            h("td", { key: 3, style: { padding: DS.spacing.sm } }, TextInput(t, { type: "number", value: i.qty, onChange: (e) => updateItem(i.id, "qty", e.target.value), style: { fontFamily: MONO } })),
-            h("td", { key: 4, style: { padding: DS.spacing.sm } }, TextInput(t, { value: i.unit, onChange: (e) => updateItem(i.id, "unit", e.target.value), placeholder: "식" })),
-            h("td", { key: 5, style: { padding: DS.spacing.sm } }, TextInput(t, { type: "number", value: i.unitPrice, onChange: (e) => updateItem(i.id, "unitPrice", e.target.value), style: { fontFamily: MONO } })),
-            h("td", { key: 6, style: { padding: DS.spacing.sm } }, h("div", { style: { display: "flex", alignItems: "center", gap: DS.spacing.xs } }, [
+            h("td", { key: 1, style: { padding: qCellPad } }, TextInput(t, { value: i.name, onChange: (e) => updateItem(i.id, "name", e.target.value), placeholder: "채널 간판" })),
+            h("td", { key: 2, style: { padding: qCellPad } }, TextInput(t, { value: i.spec, onChange: (e) => updateItem(i.id, "spec", e.target.value), placeholder: "LED 채널 / W3000×H600" })),
+            h("td", { key: 3, style: { padding: qCellPad } }, TextInput(t, { type: "number", value: i.qty, onChange: (e) => updateItem(i.id, "qty", e.target.value), style: { fontFamily: MONO } })),
+            h("td", { key: 4, style: { padding: qCellPad } }, TextInput(t, { value: i.unit, onChange: (e) => updateItem(i.id, "unit", e.target.value), placeholder: "식" })),
+            h("td", { key: 5, style: { padding: qCellPad } }, TextInput(t, { type: "number", value: i.unitPrice, onChange: (e) => updateItem(i.id, "unitPrice", e.target.value), style: { fontFamily: MONO } })),
+            h("td", { key: 6, style: { padding: qCellPad } }, h("div", { style: { display: "flex", alignItems: "center", gap: DS.spacing.xs } }, [
               TextInput(t, { type: "number", value: i.marginOverride === null || i.marginOverride === undefined ? "" : i.marginOverride, onChange: (e) => updateItem(i.id, "marginOverride", e.target.value === "" ? null : e.target.value), placeholder: `${marginRate}`, style: { fontFamily: MONO, textAlign: "center", width: "100%", background: overridden ? t.accentSoft : undefined, borderColor: overridden ? t.accent : undefined } }),
               overridden && h("button", { key: "x", title: "전체 마진율 따르기", onClick: () => updateItem(i.id, "marginOverride", null), style: { background: "none", border: "none", cursor: "pointer", color: t.muted, fontSize: DS.font.size.base, padding: 0, lineHeight: 1 } }, "×"),
             ])),
@@ -1049,18 +1082,33 @@ function QuoteCalculator(props) {
         ]),
         h("div", { key: 3, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.md } }, "※ 공급자(회사) 정보는 좌측 하단 '회사 정보 설정'에서 관리합니다."),
       ]),
-      Card(t, { key: 2, style: { background: t.inkPanel, borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
-        h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.base, color: t.inkPanelMuted, padding: `${DS.spacing.xs}px 0` } }, [h("span", { key: 1 }, "공급가액 (VAT 별도)"), h("span", { key: 2, style: { fontFamily: MONO } }, won(subtotal))]),
-        h("div", { key: 2, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.base, color: t.inkPanelMuted, padding: `${DS.spacing.xs}px 0` } }, [h("span", { key: 1 }, "부가세 (10%)"), h("span", { key: 2, style: { fontFamily: MONO } }, won(vat))]),
-        h("div", { key: 3, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.xl, fontWeight: DS.font.weight.bold, color: t.inkPanelText, paddingTop: DS.spacing.lg, marginTop: DS.spacing.sm, borderTop: `1px solid ${t.inkPanelBorder}` } }, [h("span", { key: 1 }, "합계 (VAT 포함)"), h("span", { key: 2, style: { fontFamily: MONO, color: t.accent } }, won(total))]),
+      Card(t, { key: 2, style: { background: t.inkPanel, borderTop: `3px solid ${qAccent}`, boxShadow: DS.shadow.sm } }, [
+        h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.base, color: t.inkPanelMuted, padding: `${DS.spacing.xs}px 0`, fontFamily: qFont } }, [h("span", { key: 1 }, "공급가액 (VAT 별도)"), h("span", { key: 2, style: { fontFamily: MONO } }, won(subtotal))]),
+        h("div", { key: 2, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.base, color: t.inkPanelMuted, padding: `${DS.spacing.xs}px 0`, fontFamily: qFont } }, [h("span", { key: 1 }, "부가세 (10%)"), h("span", { key: 2, style: { fontFamily: MONO } }, won(vat))]),
+        h("div", { key: 3, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.xl, fontWeight: DS.font.weight.bold, color: t.inkPanelText, paddingTop: DS.spacing.lg, marginTop: DS.spacing.sm, borderTop: `1px solid ${t.inkPanelBorder}`, fontFamily: qFont } }, [h("span", { key: 1 }, "합계 (VAT 포함)"), h("span", { key: 2, style: { fontFamily: MONO, color: qAccent } }, won(total))]),
       ]),
     ]),
-    // 액션 — 저장/PDF/엑셀 버튼 로직 동일, 스타일만 DS 토큰
+    // 액션 — 저장/PDF/엑셀 버튼 로직 동일, 견적 스타일 선택 시 PDF·엑셀 버튼에도 즉시 반영
     h("div", { key: "act", style: { display: "flex", gap: DS.spacing.lg, flexWrap: "wrap", alignItems: "center" } }, [
       Btn(t, { key: 1, variant: "accent", onClick: handleSave }, [Ico.save({ size: 14 }), " 견적 저장"]),
-      Btn(t, { key: 2, variant: "blue", onClick: handlePdf }, [Ico.pdf({ size: 14 }), " PDF 내보내기"]),
-      Btn(t, { key: 3, variant: "ghost", onClick: handleExcel }, [Ico.download({ size: 14 }), " 엑셀 내보내기"]),
+      Btn(t, { key: 2, onClick: handlePdf, style: { background: qAccent, color: "#fff" } }, [Ico.pdf({ size: 14 }), " PDF 내보내기"]),
+      Btn(t, { key: 3, variant: "ghost", onClick: handleExcel, style: { borderColor: qAccent, color: qAccent } }, [Ico.download({ size: 14 }), " 엑셀 내보내기"]),
+      h("div", { key: "style", style: { display: "flex", alignItems: "center", gap: DS.spacing.sm } }, [
+        h("span", { key: 1, style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.semibold } }, "견적 스타일"),
+        Sel(t, { value: quoteStyle, onChange: (e) => changeQuoteStyle(e.target.value), style: { width: 130, padding: `${DS.spacing.md}px ${DS.spacing.md}px`, fontSize: DS.font.size.sm } }, FONT_MOODS),
+      ]),
       toast && h("span", { key: 4, style: { fontSize: DS.font.size.base, color: toast.includes("실패") ? t.red : t.green, alignSelf: "center", fontWeight: toast.includes("실패") ? DS.font.weight.semibold : DS.font.weight.regular } }, toast),
+      h("button", { key: "preview-toggle", onClick: () => setPreviewOpen((o) => !o), style: { background: "none", border: `1px solid ${qAccent}`, color: qAccent, borderRadius: DS.radius.md, padding: `${DS.spacing.sm}px ${DS.spacing.lg}px`, cursor: "pointer", fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, fontFamily: FONT } }, previewOpen ? "미리보기 닫기" : "미리보기 보기"),
+    ]),
+    // 견적 미리보기 — 실제 PDF 내보내기(buildQuoteHTML)와 동일한 함수로 렌더링하므로 별도 스타일 정의가 없다.
+    // 견적 스타일을 바꾸거나 품목/수신처를 수정하면 즉시 다시 그려진다.
+    previewOpen && Card(t, { key: "preview", style: { borderTop: `3px solid ${qAccent}`, boxShadow: DS.shadow.sm, padding: 0, overflow: "hidden" } }, [
+      h("div", { key: "hh", style: { padding: `${DS.spacing.md}px ${DS.spacing.xl}px`, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.muted, borderBottom: `1px solid ${t.divider}` } }, `견적서 미리보기 · ${quoteStyle}`),
+      h("iframe", {
+        key: "frame",
+        srcDoc: buildQuoteHTML({ company, client, quoteNo, quoteDate, validity, items: exportItems(), subtotal, vat, total, logo, stamp, notes: note, theme: quoteStyle }),
+        style: { width: "100%", height: 560, border: "none", display: "block", background: "#fff" },
+      }),
     ]),
     // 저장 목록 — 검색/불러오기/삭제 로직 동일, 스타일만 DS 토큰
     loaded && saved.length > 0 && Card(t, { key: "saved", style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, (() => {
@@ -1108,6 +1156,38 @@ const SIGN_TYPES = ["채널간판 (전면발광)", "채널간판 (후면발광)"
 // 시안 의뢰서 "견적서 스타일" 선택지 — BRIEF_TEMPLATES의 키와 1:1로 대응하며, PDF·미리보기·
 // 클립보드 출력에 실제로 적용된다(renderDocument/renderBriefText 참고).
 const FONT_MOODS = ["기본형", "심플형", "프리미엄형", "공공기관", "기업형"];
+
+// 구버전 견적 PDF 테마(classic/navy/charcoal)를 5종 스타일 이름으로 자동 변환한다 — sp2-pdf-theme
+// 저장 키/값 형식은 그대로 재사용하되(스토리지 키 변경 없음), 값의 의미만 색상 3종 → 스타일 5종으로
+// 넘어가므로 기존에 저장된 값도 항상 유효한 스타일 이름으로 매핑되도록 한다.
+const LEGACY_PDF_THEME_MAP = { classic: "기본형", navy: "기업형", charcoal: "프리미엄형" };
+function migrateQuoteStyle(v) {
+  if (FONT_MOODS.includes(v)) return v;
+  return LEGACY_PDF_THEME_MAP[v] || FONT_MOODS[0];
+}
+
+// 견적 엑셀(main.js)은 별도 프로세스라 renderer의 BRIEF_TEMPLATES를 직접 import할 수 없으므로,
+// 렌더러가 스타일 이름으로부터 필요한 색상/폰트 값만 뽑아 IPC로 함께 전달한다(테마 정의를 두 곳에
+// 따로 두지 않기 위함 — main.js는 이 값을 그대로 쓰기만 하고 스타일을 재정의하지 않는다).
+const EXCEL_FONT_BY_STYLE = { "기본형": "맑은 고딕", "심플형": "맑은 고딕", "프리미엄형": "바탕", "공공기관": "맑은 고딕", "기업형": "맑은 고딕" };
+function hexToArgb(hex) {
+  const h6 = String(hex || "#000000").replace("#", "").padStart(6, "0").slice(0, 6).toUpperCase();
+  return "FF" + h6;
+}
+function quoteExcelStyleTokens(styleName) {
+  const tpl = briefTemplateFor(styleName);
+  const headerText = tpl.table.headerColor || tpl.colors.ink;
+  return {
+    font: EXCEL_FONT_BY_STYLE[styleName] || "맑은 고딕",
+    title: hexToArgb(tpl.colors.ink),
+    headFill: hexToArgb(tpl.table.headerBg),
+    headText: hexToArgb(headerText),
+    tableHeadFill: hexToArgb(tpl.table.headerBg),
+    tableHeadText: hexToArgb(headerText),
+    grand: hexToArgb(tpl.colors.brand),
+    bar: hexToArgb(tpl.colors.brand),
+  };
+}
 
 function DesignBrief(props) {
   const t = props.theme;
@@ -2536,13 +2616,14 @@ function SettingsCompanySection(props) {
 
 function SettingsOutputSection(props) {
   const t = props.theme;
-  const [pdfTheme, setPdfThemeState] = useState("classic");
+  const [pdfTheme, setPdfThemeState] = useState(FONT_MOODS[0]);
   const [briefStyle, setBriefStyle] = useState(FONT_MOODS[0]);
 
-  // 기존 QuoteCalculator가 쓰는 저장 키(sp2-pdf-theme)를 그대로 읽고 쓴다.
+  // 기존 QuoteCalculator가 쓰는 저장 키(sp2-pdf-theme)를 그대로 읽고 쓴다 — 값의 의미만 색상 3종에서
+  // 5종 스타일 이름으로 바뀌었으므로, 구버전 값은 migrateQuoteStyle로 자동 변환한다.
   // sp2-brief-defaults는 새 시안 의뢰서를 열 때 적용될 기본 스타일로, 기존에 저장된 의뢰서에는 영향 없다.
   useEffect(() => {
-    loadKey("sp2-pdf-theme", "classic").then(setPdfThemeState);
+    loadKey("sp2-pdf-theme", FONT_MOODS[0]).then((v) => setPdfThemeState(migrateQuoteStyle(v)));
     loadKey("sp2-brief-defaults", null).then((d) => {
       if (d) setBriefStyle(d.style || FONT_MOODS[0]);
     });
@@ -2558,7 +2639,7 @@ function SettingsOutputSection(props) {
       h("div", { key: "fields", style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg, maxWidth: 280 } }, [
         Field(t, "앱 테마", Sel(t, { value: props.appTheme, onChange: (e) => props.onChangeAppTheme(e.target.value) }, THEME_IDS.map((id) => ({ value: id, label: THEME_LABELS[id] })))),
         Field(t, "견적서 스타일", Sel(t, { value: briefStyle, onChange: (e) => changeBriefStyle(e.target.value) }, FONT_MOODS)),
-        Field(t, "견적계산기 PDF 테마", Sel(t, { value: pdfTheme, onChange: (e) => changePdfTheme(e.target.value) }, Object.keys(QUOTE_THEMES).map((k) => ({ value: k, label: QUOTE_THEMES[k].name })))),
+        Field(t, "견적계산기 PDF 테마", Sel(t, { value: pdfTheme, onChange: (e) => changePdfTheme(e.target.value) }, FONT_MOODS)),
       ]),
       h("div", { key: "note", style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.md } }, "※ 견적서 스타일은 시안 의뢰서 PDF에, 견적계산기 PDF 테마는 견적 계산기의 PDF·엑셀 내보내기에 적용됩니다."),
     ]),

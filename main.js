@@ -109,17 +109,15 @@ ipcMain.handle("backup-import", async () => {
 });
 
 
-/* 엑셀 견적서 테마 팔레트 (PDF의 QUOTE_THEMES와 동일한 3종) */
-const EXCEL_THEMES = {
-  classic: { title: "FF1D1D1F", headFill: "FFF3F3F3", headText: "FF1D1D1F", tableHeadFill: "FFF3F3F3", tableHeadText: "FF333333", grand: "FF1D1D1F", bar: "FF222222" },
-  navy: { title: "FF0B1F3A", headFill: "FF0B1F3A", headText: "FFFFFFFF", tableHeadFill: "FFEEF1F6", tableHeadText: "FF0B1F3A", grand: "FF0B1F3A", bar: "FFC9A24B" },
-  charcoal: { title: "FF1D1D1F", headFill: "FF1D1D1F", headText: "FFFFFFFF", tableHeadFill: "FFFFF1E8", tableHeadText: "FF1D1D1F", grand: "FF1D1D1F", bar: "FFFF6B35" },
-};
+/* 엑셀 견적서 스타일 토큰 기본값 — 렌더러(quoteExcelStyleTokens)가 BRIEF_TEMPLATES 5종에서 뽑아 IPC로
+   보내주는 값을 그대로 쓴다. main.js는 별도 프로세스라 렌더러의 BRIEF_TEMPLATES를 직접 참조할 수 없으므로
+   테마를 여기 새로 정의하지 않고, 혹시 styleTokens가 누락된 경우에만 쓸 안전한 기본값만 둔다("기본형"과 동일). */
+const EXCEL_DEFAULT_STYLE_TOKENS = { font: "맑은 고딕", title: "FF1D1D1F", headFill: "FFF3F3F3", headText: "FF1D1D1F", tableHeadFill: "FFF3F3F3", tableHeadText: "FF333333", grand: "FFFF6B35", bar: "FFFF6B35" };
 
 ipcMain.handle("export-excel", async (_e, quote, filename) => {
   try {
     const { company, client, quoteNo, quoteDate, validity, items, subtotal, vat, total, notes } = quote;
-    const ex = EXCEL_THEMES[quote.theme] || EXCEL_THEMES.classic;
+    const ex = quote.styleTokens || EXCEL_DEFAULT_STYLE_TOKENS;
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("견적서", {
       pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
@@ -132,7 +130,7 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
 
     const thin = { style: "thin", color: { argb: "FFBFBFBF" } };
     const allBorder = { top: thin, left: thin, bottom: thin, right: thin };
-    const F = (name, size, bold, color) => ({ name: name || "맑은 고딕", size: size || 10, bold: !!bold, color: color ? { argb: color } : undefined });
+    const F = (name, size, bold, color) => ({ name: name || ex.font || "맑은 고딕", size: size || 10, bold: !!bold, color: color ? { argb: color } : undefined });
     const money = '#,##0';
 
     // 열 너비 자동 계산용 — 한글(전각) 문자는 폭 2로 계산해 실제 표시 폭에 가깝게 추정
@@ -144,18 +142,18 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     // 제목
     ws.mergeCells(`A${r}:C${r}`);
     ws.getCell(`A${r}`).value = "견 적 서";
-    ws.getCell(`A${r}`).font = F("맑은 고딕", 26, true, ex.title);
+    ws.getCell(`A${r}`).font = F(null, 26, true, ex.title);
     ws.getCell(`A${r}`).alignment = { vertical: "middle" };
     // 공급자 정보 (우측)
     ws.mergeCells(`E${r}:G${r}`);
     ws.getCell(`E${r}`).value = company.name;
-    ws.getCell(`E${r}`).font = F("맑은 고딕", 14, true);
+    ws.getCell(`E${r}`).font = F(null, 14, true);
     ws.getCell(`E${r}`).alignment = { horizontal: "right" };
     ws.getRow(r).height = 34;
     r++;
 
     ws.getCell(`A${r}`).value = "QUOTATION";
-    ws.getCell(`A${r}`).font = F("맑은 고딕", 10, false, "FF999999");
+    ws.getCell(`A${r}`).font = F(null, 10, false, "FF999999");
     const supLines = [
       company.addr,
       `TEL. ${company.tel}${company.fax ? "   FAX. " + company.fax : ""}`,
@@ -167,7 +165,7 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
       const rr = r + idx;
       ws.mergeCells(`D${rr}:G${rr}`);
       ws.getCell(`D${rr}`).value = line;
-      ws.getCell(`D${rr}`).font = F("맑은 고딕", 9.5);
+      ws.getCell(`D${rr}`).font = F(null, 9.5);
       ws.getCell(`D${rr}`).alignment = { horizontal: "right" };
     });
     r += Math.max(supLines.length, 1);
@@ -186,11 +184,11 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     meta.forEach((m, idx) => {
       const rr = metaStart + idx;
       ws.getCell(`A${rr}`).value = m[0];
-      ws.getCell(`A${rr}`).font = F("맑은 고딕", 10, true, "FF444444");
+      ws.getCell(`A${rr}`).font = F(null, 10, true, "FF444444");
       ws.getCell(`A${rr}`).alignment = { horizontal: "left" };
       ws.mergeCells(`B${rr}:C${rr}`);
       ws.getCell(`B${rr}`).value = m[1];
-      ws.getCell(`B${rr}`).font = F("맑은 고딕", 10);
+      ws.getCell(`B${rr}`).font = F(null, 10);
       ws.getCell(`B${rr}`).alignment = { horizontal: "left", indent: 1 };
       ws.getRow(rr).height = 18;
     });
@@ -203,12 +201,12 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     sumBox.forEach((sb, i) => {
       const rr = metaStart + i;
       ws.getCell(`E${rr}`).value = sb[0];
-      ws.getCell(`E${rr}`).font = F("맑은 고딕", 10.5, sb[3], sb[5]);
+      ws.getCell(`E${rr}`).font = F(null, 10.5, sb[3], sb[5]);
       ws.getCell(`E${rr}`).alignment = { vertical: "middle", shrinkToFit: true };
       ws.mergeCells(`F${rr}:G${rr}`);
       ws.getCell(`F${rr}`).value = sb[1];
       ws.getCell(`F${rr}`).numFmt = '₩#,##0';
-      ws.getCell(`F${rr}`).font = F("맑은 고딕", sb[2], sb[3], sb[5]);
+      ws.getCell(`F${rr}`).font = F(null, sb[2], sb[3], sb[5]);
       ws.getCell(`F${rr}`).alignment = { horizontal: "right", vertical: "middle" };
       if (sb[4]) {
         ["E", "F", "G"].forEach((col) => { ws.getCell(`${col}${rr}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: sb[4] } }; });
@@ -225,7 +223,7 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
       track(i, hh);
       const cell = ws.getCell(headRow, i + 1);
       cell.value = hh;
-      cell.font = F("맑은 고딕", 10, true, ex.tableHeadText);
+      cell.font = F(null, 10, true, ex.tableHeadText);
       cell.alignment = { horizontal: "center", vertical: "middle" };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ex.tableHeadFill } };
       cell.border = { top: { style: "medium", color: { argb: ex.bar } }, bottom: thin, left: thin, right: thin };
@@ -257,12 +255,12 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
         track(ci, v);
         const cell = ws.getCell(rr, ci + 1);
         cell.value = v;
-        cell.font = F("맑은 고딕", 10);
+        cell.font = F(null, 10);
         cell.border = allBorder;
         if (ci === 0 || ci === 3) cell.alignment = { horizontal: "center", vertical: "middle" };
         else if (ci === 4 || ci === 5) { cell.alignment = { horizontal: "right", vertical: "middle" }; if (typeof v === "number") cell.numFmt = money; }
         else cell.alignment = { horizontal: "left", vertical: "middle" };
-        if (ci === 5) cell.font = F("맑은 고딕", 10, true);
+        if (ci === 5) cell.font = F(null, 10, true);
       });
       ws.getRow(rr).height = rowH;
     }
@@ -270,8 +268,8 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
 
     // 열 너비 자동 계산 — 실제 데이터 폭에 맞추되 기존 고정폭을 최소값으로 유지하고 과도한 확장은 상한으로 제한
     const MIN_W = [11, 25, 20, 9, 14, 16, 13];
-    const MAX_W = [14, 45, 32, 12, 20, 22, 18];
-    const colWidths = colMaxLen.map((len, i) => Math.min(Math.max(len + 2, MIN_W[i]), MAX_W[i]));
+    const MAX_W = [14, 55, 40, 12, 20, 22, 18];
+    const colWidths = colMaxLen.map((len, i) => Math.min(Math.max(len + 3, MIN_W[i]), MAX_W[i]));
     colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 
     // 품목명/규격 사양이 계산된 열 너비를 넘으면 줄바꿈을 적용하고 그만큼 행 높이를 늘림(기존 행 높이보다 작아지지 않음)
@@ -298,11 +296,11 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
       ws.mergeCells(`A${rr}:E${rr}`);
       ws.getCell(`A${rr}`).value = sr[0];
       ws.getCell(`A${rr}`).alignment = { horizontal: "right" };
-      ws.getCell(`A${rr}`).font = F("맑은 고딕", sr[2] ? 12 : 10, sr[2], sr[2] ? ex.grand : null);
+      ws.getCell(`A${rr}`).font = F(null, sr[2] ? 12 : 10, sr[2], sr[2] ? ex.grand : null);
       ws.getCell(`F${rr}`).value = sr[1];
       ws.getCell(`F${rr}`).numFmt = money;
       ws.getCell(`F${rr}`).alignment = { horizontal: "right" };
-      ws.getCell(`F${rr}`).font = F("맑은 고딕", sr[2] ? 13 : 10, sr[2], sr[2] ? ex.grand : null);
+      ws.getCell(`F${rr}`).font = F(null, sr[2] ? 13 : 10, sr[2], sr[2] ? ex.grand : null);
       if (sr[2]) {
         ws.getCell(`A${rr}`).border = { top: { style: "medium", color: { argb: ex.grand } } };
         ws.getCell(`F${rr}`).border = { top: { style: "medium", color: { argb: ex.grand } } };
@@ -314,12 +312,12 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     // 기타 안내사항
     const noteArr = (notes || "").split("\n").map((s) => s.replace(/^\s*\d+\.\s*/, "").trim()).filter(Boolean);
     ws.getCell(`A${r}`).value = "기타 안내사항";
-    ws.getCell(`A${r}`).font = F("맑은 고딕", 10, true);
+    ws.getCell(`A${r}`).font = F(null, 10, true);
     r++;
     (noteArr.length ? noteArr : ["상기 견적은 부가세 포함 금액입니다."]).forEach((n, idx) => {
       ws.mergeCells(`A${r + idx}:E${r + idx}`);
       ws.getCell(`A${r + idx}`).value = `${idx + 1}. ${n}`;
-      ws.getCell(`A${r + idx}`).font = F("맑은 고딕", 9.5, false, "FF555555");
+      ws.getCell(`A${r + idx}`).font = F(null, 9.5, false, "FF555555");
     });
 
     const buf = await wb.xlsx.writeBuffer();
