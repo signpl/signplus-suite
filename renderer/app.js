@@ -2736,7 +2736,9 @@ function App() {
     (async () => {
       const m = await loadKey("sp2-theme", "light");
       const pr = await loadKey("sp2-presets", MATERIAL_PRESETS);
-      let co = await loadKey("sp2-company", DEFAULT_COMPANY);
+      // DEFAULT_COMPANY로 먼저 전체 키를 채운 뒤 저장된 값을 덮어써서, 이전 버전(영문회사명/계좌정보/
+      // 로고/직인 필드가 없던 시절)에 저장된 값이 남아있어도 항상 완전한 모양의 company 객체가 된다.
+      let co = { ...DEFAULT_COMPANY, ...(await loadKey("sp2-company", DEFAULT_COMPANY)) };
       // 로고/직인은 과거 별도 키(sp2-brand)에 저장돼 있었다 — 회사정보를 단일 설정으로 통합하면서
       // 아직 sp2-company에 로고/직인이 없는 사용자는 1회성으로 옮겨온다(sp2-brand 원본은 안전망으로 유지).
       const legacyBrand = await loadKey("sp2-brand", {});
@@ -2760,7 +2762,10 @@ function App() {
   const cycleTheme = () => { const idx = THEME_IDS.indexOf(mode); changeTheme(THEME_IDS[(idx + 1) % THEME_IDS.length] || "light"); };
   const changePresets = (next) => setPresets(next);
   const changePresetLabel = async (v) => { const val = (v || "").trim() || "제일에코"; setPresetLabel(val); await saveKey("sp2-preset-label", val); };
-  const saveCompany = async (c) => { setCompany(c); await saveKey("sp2-company", c); };
+  // 항상 DEFAULT_COMPANY 전체 키를 기준으로 병합해 저장 — 로고/직인만 바꾸는 부분 업데이트
+  // (QuoteCalculator의 pickLogo 등)가 다른 필드를 담고 있지 않아도 기존 값이 사라지지 않고,
+  // 화면(state)과 저장소(sp2-company)가 항상 같은 모양의 객체로 동기화된다.
+  const saveCompany = async (c) => { const full = { ...DEFAULT_COMPANY, ...company, ...c }; setCompany(full); await saveKey("sp2-company", full); };
 
   // 거래처 관리
   const saveVendors = async (next) => { setVendors(next); await saveKey("sp2-vendors", next); };

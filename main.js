@@ -6,6 +6,12 @@ const { createLicenseService } = require("./services/licenseService.js");
 const { createSqliteProvider } = require("./providers/sqliteProvider.js");
 const { createKvRepository } = require("./repositories/kvRepository.js");
 
+// userData 경로(app.getPath("userData"))는 app.getName()에 따라 결정된다. 이름을 명시적으로
+// 고정하지 않으면 실행 방식(개발 중 "electron ."과 패키징된 설치본)에 따라 다른 이름으로 해석될
+// 수 있어, 같은 컴퓨터인데도 서로 다른 폴더(=서로 다른 signplus.db)를 보게 될 위험이 있다.
+// getStorageDir()이 이 이름을 기준으로 폴더를 만들기 전에 항상 동일한 이름을 쓰도록 고정한다.
+app.setName("Signplus Suite");
+
 /* ------------------------------------------------------------------ */
 /*  Cloud-Ready 계층 배선(Phase 1) — main.js는 IPC 배선만 담당하고, 실제      */
 /*  저장소 접속(Provider)과 데이터 조작(Repository)은 각자의 모듈에 위임한다.  */
