@@ -2033,6 +2033,9 @@ function DrawingAnalyzer(props) {
         ]),
         Stat("도면 축척", scaleLabel, ""),
         Stat("실제 크기", `${scaledPageSize.widthMM.toFixed(0)}×${scaledPageSize.heightMM.toFixed(0)}`, "mm"),
+        // 진단용 — 병합 전(원본 조각) 대비 병합 후(Character) 개수를 함께 보여줘, 글자수가
+        // 기대와 다를 때 "병합이 전혀 안 된 것"인지 "병합은 되지만 부족한 것"인지 바로 구분한다.
+        scaledShapes.length !== analysis.count && Stat("원본 조각수 (병합 전)", num(scaledShapes.length), "개"),
         Stat("글자수", num(analysis.count), "개"),
         Stat("평균 글자 높이", num(Math.round(avgSizeMm)), "각(mm)", true),
         Stat("평균 획폭", analysis.avgStrokeWidth.toFixed(1), "mm"),
