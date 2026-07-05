@@ -833,6 +833,18 @@ function QuoteCalculator(props) {
     }
   }, [props.openQuoteId, loaded]);
 
+  // AI 도면 분석에서 "견적으로 보내기"로 진입한 경우 — 자동생성된 품목을 기존 품목 뒤에 추가한다.
+  useEffect(() => {
+    if (props.pendingItems && props.pendingItems.length && loaded) {
+      setItems((prev) => {
+        const meaningful = prev.filter((i) => i.name || i.spec || (Number(i.unitPrice) || 0) * (Number(i.qty) || 0));
+        return [...meaningful, ...props.pendingItems];
+      });
+      flash("도면 분석 품목이 추가되었습니다");
+      if (props.onPendingItemsHandled) props.onPendingItemsHandled();
+    }
+  }, [props.pendingItems, loaded]);
+
   // 견적서(PDF·엑셀)에는 원가가 아닌 마진 반영된 판매단가로 출력
   const exportItems = () => items.map((i) => ({ ...i, unitPrice: sellPrice(i) }));
   const handleExcel = async () => {
@@ -1620,6 +1632,470 @@ function BoardCalc(props) {
 }
 
 /* ==================================================================== */
+/*  6. AI 도면 분석 — AI(PDF 호환 저장)/PDF/SVG 도면에서 벡터 Path를        */
+/*  추출해 글자 단위 Bounding Box/면적/외곽길이/각수를 분석하고, LED/SMPS   */
+/*  추천과 견적 자동 품목 생성·레이저 생산용 DXF Export까지 연결한다.       */
+/*  실제 파일 파싱·기하 계산은 services/(vectorGeometry·pdfVectorParser·   */
+/*  svgVectorParser·vectorQuoteBridge)에 있고, 이 컴포넌트는 캔버스        */
+/*  UI(줌/팬/선택)와 화면 상태만 다룬다 — "Version 1" 기반 구현으로,        */
+/*  각수는 Path Segment 개수 기준으로 계산한다(추후 개선 예정).             */
+/* ==================================================================== */
+const DRAWING_ACCEPT_EXT = ["ai", "pdf", "svg"];
+
+// 짝/홀수 규칙(even-odd ray casting)으로 점이 도형(구멍 포함) 내부에 있는지 판정 — 캔버스 클릭 선택용
+function pointInShape(shape, x, y) {
+  let inside = false;
+  for (const sp of shape.subpaths) {
+    const pts = sp.points;
+    let j = pts.length - 1;
+    for (let i = 0; i < pts.length; i++) {
+      const xi = pts[i][0], yi = pts[i][1];
+      const xj = pts[j][0], yj = pts[j][1];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+      j = i;
+    }
+  }
+  return inside;
+}
+
+function DrawingAnalyzer(props) {
+  const t = props.theme;
+  const canvasRef = useRef(null);
+  const viewRef = useRef({ scale: 1, panX: 0, panY: 0 });
+  const dragRef = useRef(null);
+
+  const [fileInfo, setFileInfo] = useState(null); // { filename, type }
+  const [pageSize, setPageSize] = useState({ widthMM: 0, heightMM: 0 }); // 도면에 그려진 원본 크기(축척 적용 전)
+  const [rawShapes, setRawShapes] = useState([]); // 도면 원본 좌표(축척 적용 전)
+  const [selectedIndex, setSelectedIndex] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const [redrawTick, setRedrawTick] = useState(0);
+
+  // 축척 엔진 — Auto/1:1/1:2/1:5/1:10/1:20/직접입력. Auto는 파일이 선언한 단위를 신뢰할 수 있을 때만
+  // 성공하고, 실패하면 scaleDetection.reliable=false가 되어 아래 배너로 "축척을 선택하십시오"를 알린다.
+  const [scaleMode, setScaleMode] = useState("auto");
+  const [customRatio, setCustomRatio] = useState("10");
+  const [scaleDetection, setScaleDetection] = useState({ ratio: 1, reliable: true });
+  const [showDimensions, setShowDimensions] = useState(true);
+
+  const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2500); };
+
+  const ratio = useMemo(() => window.ScaleEngine.resolveRatio(scaleMode, customRatio, scaleDetection), [scaleMode, customRatio, scaleDetection]);
+  const scaledShapes = useMemo(() => window.ScaleEngine.scaleShapes(rawShapes, ratio), [rawShapes, ratio]);
+  const scaledPageSize = useMemo(() => window.ScaleEngine.scalePageSize(pageSize, ratio), [pageSize, ratio]);
+
+  // 모든 계산(면적/외곽길이/제작 정보)은 여기서부터 "실제 크기(mm)" 기준으로 수행한다.
+  // 글자 수는 Path/Segment/SubPath 개수가 아니라, 서로 맞닿거나 겹치는 조각을 하나로 묶은
+  // "실제 Object(글자)" 단위로 집계한다(services/vectorGeometry.js의 groupIntoGlyphs).
+  const glyphShapes = useMemo(() => window.VectorGeometry.groupIntoGlyphs(scaledShapes), [scaledShapes]);
+  const analysis = useMemo(() => window.VectorGeometry.aggregateShapes(glyphShapes), [glyphShapes]);
+  const avgSizeMm = useMemo(() => (analysis.count ? analysis.shapes.reduce((s, sh) => s + Math.max(sh.width, sh.height), 0) / analysis.count : 0), [analysis]);
+  // 글자 한 자씩 순서대로(좌→우) 치수를 확인할 수 있도록 정렬된 목록 — 원래 인덱스(_idx)는 캔버스
+  // 선택(selectedIndex)과 그대로 연동된다.
+  const orderedGlyphs = useMemo(() => analysis.shapes
+    .map((s, i) => ({ ...s, _idx: i }))
+    .sort((a, b) => (a.bbox.minX + a.bbox.maxX) / 2 - (b.bbox.minX + b.bbox.maxX) / 2), [analysis]);
+  const production = useMemo(() => window.LedEngine.recommendProduction({
+    avgHeightMm: avgSizeMm,
+    totalPerimeterMm: analysis.totalPerimeter,
+    glyphCount: analysis.count,
+  }), [analysis, avgSizeMm]);
+
+  // 제품 선택 — 목록은 환경설정 > 단가표(props.presets)의 "채널" 카테고리에서 그대로 생성한다.
+  // 선택값("")은 자동(평균 각수에 가장 가까운 상품)을 의미한다.
+  const [selectedChannelId, setSelectedChannelId] = useState("");
+  const channelOptions = useMemo(() => window.VectorQuoteBridge.listChannelPresets(props.presets), [props.presets]);
+  // 단가는 항상 단가표에서 다시 조회한다 — 제품 선택이 바뀌든, 단가표 자체가 바뀌든 즉시 반영된다.
+  const unitPrices = useMemo(() => window.VectorQuoteBridge.resolveUnitPrices(props.presets, {
+    avgSizeMm,
+    ledType: production.ledType,
+    smpsCap: production.smpsCap,
+    channelPresetId: selectedChannelId || null,
+  }), [props.presets, avgSizeMm, production, selectedChannelId]);
+  const previewItems = useMemo(() => window.VectorQuoteBridge.buildQuoteItems({
+    glyphCount: analysis.count,
+    totalAreaSqM: analysis.totalArea / 1e6,
+    channelAvgSizeMm: avgSizeMm,
+    channelUnitPrice: unitPrices.channelUnitPrice,
+    galvaUnitPrice: unitPrices.galvaUnitPrice,
+    generalAssemblyUnitPrice: unitPrices.generalAssemblyUnitPrice,
+    acrylicUnitPricePerSqM: unitPrices.acrylicUnitPricePerSqM,
+    moduleCount: production.moduleCount,
+    moduleUnitPrice: unitPrices.moduleUnitPrice,
+    ledType: production.ledType,
+    assemblyUnitPrice: unitPrices.assemblyUnitPrice,
+    smpsCap: production.smpsCap,
+    smpsQty: production.smpsQty,
+    smpsUnitPrice: unitPrices.smpsUnitPrice,
+    wireLengthM: production.wireLengthM,
+    wireUnitPrice: unitPrices.wireUnitPrice,
+    siliconeQty: production.siliconeQty,
+    siliconeUnitPrice: unitPrices.siliconeUnitPrice,
+  }), [analysis, avgSizeMm, unitPrices, production]);
+
+  const fitToViewWithSize = (widthMM, heightMM) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !widthMM || !heightMM) return;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const scale = Math.max(0.0001, Math.min(w / widthMM, h / heightMM) * 0.9);
+    viewRef.current = { scale, panX: (w - widthMM * scale) / 2, panY: (h - heightMM * scale) / 2 };
+    setRedrawTick((n) => n + 1);
+  };
+  const fitToView = () => fitToViewWithSize(scaledPageSize.widthMM, scaledPageSize.heightMM);
+
+  // 축척(ratio)이 바뀌면(= 실제 크기가 바뀌면) 화면도 다시 맞춘다.
+  useEffect(() => {
+    if (fileInfo) fitToViewWithSize(scaledPageSize.widthMM, scaledPageSize.heightMM);
+  }, [ratio]);
+
+  const applyResult = (result, filename, type) => {
+    const shapes = (result && result.shapes) || [];
+    const agg = window.VectorGeometry.aggregateShapes(shapes);
+    const widthMM = (result && result.widthMM) || agg.bbox.maxX || 100;
+    const heightMM = (result && result.heightMM) || agg.bbox.maxY || 100;
+    setRawShapes(shapes);
+    setPageSize({ widthMM, heightMM });
+    setFileInfo({ filename, type });
+    setSelectedIndex(null);
+    setError("");
+    setScaleMode("auto");
+    const detection = window.ScaleEngine.detectAutoScale(result);
+    setScaleDetection(detection);
+    if (!shapes.length) flash("도형을 찾지 못했습니다 (텍스트가 아직 윤곽선으로 변환되지 않았을 수 있습니다)");
+    setTimeout(() => fitToViewWithSize(widthMM * detection.ratio, heightMM * detection.ratio), 0);
+  };
+
+  const handleParsedResponse = (res, filename) => {
+    if (!res || !res.ok) { setError((res && res.error) || "파일을 불러오지 못했습니다."); return; }
+    if (res.type === "svg") {
+      try {
+        const parsed = window.SvgVectorParser.parse(res.text);
+        applyResult(parsed, res.filename || filename, "svg");
+      } catch (err) {
+        setError("SVG 분석 실패: " + (err && err.message ? err.message : String(err)));
+      }
+    } else {
+      applyResult(res.data, res.filename || filename, "pdf");
+    }
+  };
+
+  const handlePickFile = async () => {
+    setLoading(true); setError("");
+    try {
+      const res = await window.api.pickDrawingFile();
+      if (!res || res.canceled) return;
+      handleParsedResponse(res, res.filename);
+    } catch (err) {
+      setError("파일을 불러오지 못했습니다: " + (err && err.message ? err.message : String(err)));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file) return;
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    if (!DRAWING_ACCEPT_EXT.includes(ext)) { setError("AI/PDF/SVG 파일만 지원합니다."); return; }
+    setLoading(true); setError("");
+    try {
+      const filePath = window.api.getPathForFile(file);
+      const res = await window.api.readDrawingPath(filePath);
+      handleParsedResponse(res, file.name);
+    } catch (err) {
+      setError("파일을 불러오지 못했습니다: " + (err && err.message ? err.message : String(err)));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const { scale, panX, panY } = viewRef.current;
+    const factor = Math.pow(1.0015, -e.deltaY);
+    const newScale = Math.max(0.02, Math.min(50, scale * factor));
+    viewRef.current = { scale: newScale, panX: mx - (mx - panX) * (newScale / scale), panY: my - (my - panY) * (newScale / scale) };
+    setRedrawTick((n) => n + 1);
+  };
+
+  const handleMouseDown = (e) => {
+    dragRef.current = { startX: e.clientX, startY: e.clientY, panX0: viewRef.current.panX, panY0: viewRef.current.panY, moved: false };
+  };
+  const handleMouseMove = (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) d.moved = true;
+    if (d.moved) {
+      viewRef.current = { ...viewRef.current, panX: d.panX0 + dx, panY: d.panY0 + dy };
+      setRedrawTick((n) => n + 1);
+    }
+  };
+  const handleMouseUp = (e) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d || d.moved) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    const { scale, panX, panY } = viewRef.current;
+    const mx = (sx - panX) / scale, my = (sy - panY) / scale;
+    let found = null;
+    for (let i = analysis.shapes.length - 1; i >= 0; i--) {
+      if (pointInShape(analysis.shapes[i], mx, my)) { found = i; break; }
+    }
+    setSelectedIndex(found);
+  };
+
+  const zoomBy = (factor) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const cx = canvas.clientWidth / 2, cy = canvas.clientHeight / 2;
+    const { scale, panX, panY } = viewRef.current;
+    const newScale = Math.max(0.02, Math.min(50, scale * factor));
+    viewRef.current = { scale: newScale, panX: cx - (cx - panX) * (newScale / scale), panY: cy - (cy - panY) * (newScale / scale) };
+    setRedrawTick((n) => n + 1);
+  };
+
+  const handleSendToQuote = () => {
+    if (!analysis.count) { flash("먼저 도면을 불러오세요"); return; }
+    props.onSendToQuote(previewItems);
+    flash("견적 계산기로 전송했습니다");
+  };
+
+  const handleExportDxf = async () => {
+    if (!analysis.count) { flash("먼저 도면을 불러오세요"); return; }
+    try {
+      const shapesForDxf = analysis.shapes.map((s) => ({ subpaths: s.subpaths }));
+      const res = await window.api.exportDrawingDxf(shapesForDxf, scaledPageSize.heightMM, (fileInfo && fileInfo.filename) || "도면분석");
+      if (res && res.ok) flash("DXF 저장 완료");
+      else if (!res || !res.canceled) flash("DXF 저장 실패: " + ((res && res.error) || "알 수 없는 오류"));
+    } catch (err) {
+      flash("DXF 저장 실패: " + (err && err.message ? err.message : String(err)));
+    }
+  };
+
+  useEffect(() => {
+    const onResize = () => setRedrawTick((n) => n + 1);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // 치수선(가로/세로) 그리기 — 화살표 대신 눈금 티크 + 텍스트로 표시. 캔버스 확대/축소·이동에 쓰는
+  // scale/panX/panY를 그대로 재사용하므로 줌/팬 시 도형과 함께 자동으로 확대/축소된다.
+  const drawHDim = (ctx, x1, x2, y, label, color) => {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x1, y - 5); ctx.lineTo(x1, y + 5);
+    ctx.moveTo(x2, y - 5); ctx.lineTo(x2, y + 5);
+    ctx.moveTo(x1, y); ctx.lineTo(x2, y);
+    ctx.stroke();
+    ctx.font = "11px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.fillText(label, (x1 + x2) / 2, y - 6);
+  };
+  const drawVDim = (ctx, y1, y2, x, label, color) => {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - 5, y1); ctx.lineTo(x + 5, y1);
+    ctx.moveTo(x - 5, y2); ctx.lineTo(x + 5, y2);
+    ctx.moveTo(x, y1); ctx.lineTo(x, y2);
+    ctx.stroke();
+    ctx.save();
+    ctx.translate(x - 8, (y1 + y2) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.font = "11px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const cw = canvas.clientWidth, ch = canvas.clientHeight;
+    canvas.width = Math.max(1, Math.round(cw * dpr));
+    canvas.height = Math.max(1, Math.round(ch * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.fillStyle = t.surface2;
+    ctx.fillRect(0, 0, cw, ch);
+
+    const { scale, panX, panY } = viewRef.current;
+    if (scaledPageSize.widthMM && scaledPageSize.heightMM) {
+      ctx.fillStyle = t.surface;
+      ctx.strokeStyle = t.divider;
+      ctx.lineWidth = 1;
+      ctx.fillRect(panX, panY, scaledPageSize.widthMM * scale, scaledPageSize.heightMM * scale);
+      ctx.strokeRect(panX, panY, scaledPageSize.widthMM * scale, scaledPageSize.heightMM * scale);
+    }
+
+    analysis.shapes.forEach((shape, idx) => {
+      const selected = idx === selectedIndex;
+      ctx.beginPath();
+      for (const sp of shape.subpaths) {
+        const pts = sp.points;
+        if (pts.length < 2) continue;
+        ctx.moveTo(panX + pts[0][0] * scale, panY + pts[0][1] * scale);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(panX + pts[i][0] * scale, panY + pts[i][1] * scale);
+        if (sp.closed) ctx.closePath();
+      }
+      if (selected) { ctx.fillStyle = t.accent + "33"; ctx.fill(); }
+      ctx.strokeStyle = selected ? t.accent : t.ink;
+      ctx.lineWidth = selected ? 2 : 1;
+      ctx.stroke();
+    });
+
+    // 자동 치수선 — 축척과 무관하게 항상 실제(1:1) mm 치수를 표시한다(scaledPageSize/analysis가
+    // 이미 실제 크기 기준이므로 별도 환산 없이 그대로 라벨에 쓴다).
+    if (showDimensions && scaledPageSize.widthMM && scaledPageSize.heightMM) {
+      const x1 = panX, x2 = panX + scaledPageSize.widthMM * scale;
+      const y1 = panY, y2 = panY + scaledPageSize.heightMM * scale;
+      drawHDim(ctx, x1, x2, y2 + 24, `전체 가로 ${scaledPageSize.widthMM.toFixed(0)}mm`, t.muted);
+      drawVDim(ctx, y1, y2, x1 - 28, `전체 세로 ${scaledPageSize.heightMM.toFixed(0)}mm`, t.muted);
+      const sel = selectedIndex != null ? analysis.shapes[selectedIndex] : null;
+      if (sel) {
+        const b = sel.bbox;
+        const sx1 = panX + b.minX * scale, sx2 = panX + b.maxX * scale;
+        const sy1 = panY + b.minY * scale, sy2 = panY + b.maxY * scale;
+        drawHDim(ctx, sx1, sx2, sy1 - 10, `${sel.width.toFixed(1)}mm`, t.accent);
+        drawVDim(ctx, sy1, sy2, sx1 - 10, `${sel.height.toFixed(1)}mm`, t.accent);
+      }
+    }
+  }, [analysis, selectedIndex, scaledPageSize, t, redrawTick, showDimensions]);
+
+  const selectedShape = selectedIndex != null ? analysis.shapes[selectedIndex] : null;
+
+  const Stat = (label, value, unit, accent) => Card(t, { key: label, style: { padding: DS.spacing.lg, background: t.surface2, borderTop: `3px solid ${accent ? t.accent : t.divider}`, boxShadow: DS.shadow.sm } }, [
+    h("div", { key: 1, style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.semibold, marginBottom: DS.spacing.xs } }, label),
+    h("div", { key: 2, style: { fontSize: DS.font.size.xl, fontFamily: MONO, fontWeight: DS.font.weight.bold, color: accent ? t.accent : t.ink } }, [value, " ", h("span", { key: 1, style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.medium } }, unit)]),
+  ]);
+
+  const scaleLabel = scaleMode === "auto" ? `Auto (1:${ratio}${scaleDetection.reliable ? "" : " 추정"})` : scaleMode === "custom" ? `1:${ratio}` : scaleMode;
+  const showScaleWarning = fileInfo && scaleMode === "auto" && !scaleDetection.reliable;
+
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
+    SectionTitle(t, "AI 도면 분석", "AI(Illustrator)/PDF/SVG 도면을 불러와 글자 단위 벡터 분석 · 제작 기준 LED 추천 · 자동 견적까지 연결합니다.",
+      h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center" } }, [
+        h("span", { key: "sl", style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.semibold } }, "도면 축척"),
+        Sel(t, { key: "sm", value: scaleMode, onChange: (e) => setScaleMode(e.target.value), style: { width: 110 } }, window.ScaleEngine.SCALE_PRESETS.map((p) => ({ value: p.id, label: p.label }))),
+        scaleMode === "custom" && TextInput(t, { key: "cr", type: "number", value: customRatio, onChange: (e) => setCustomRatio(e.target.value), placeholder: "예: 10", style: { width: 70, fontFamily: MONO } }),
+        Btn(t, { key: "dim", variant: showDimensions ? "primary" : "ghost", onClick: () => setShowDimensions((v) => !v), style: { fontSize: DS.font.size.sm } }, "치수 표시"),
+        Btn(t, { key: 1, variant: "accent", onClick: handlePickFile, disabled: loading }, [Ico.download({ size: 14 }), loading ? " 불러오는 중..." : " 파일 불러오기"]),
+      ])
+    ),
+    error && h("div", { style: { padding: DS.spacing.lg, borderRadius: DS.radius.md, background: t.red + "18", color: t.red, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold } }, error),
+    showScaleWarning && h("div", { style: { padding: DS.spacing.lg, borderRadius: DS.radius.md, background: t.accentSoft, color: t.accent, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold } }, "도면 단위를 자동으로 인식하지 못했습니다 — 도면 축척을 선택하십시오."),
+    h("div", { key: "main", style: { display: "flex", gap: DS.spacing.lg, alignItems: "stretch" } }, [
+      // 캔버스(줌/팬/선택)
+      h("div", {
+        key: "canvas-wrap",
+        style: { position: "relative", flex: 2, minHeight: 460, borderRadius: DS.radius.lg, border: `1px solid ${dragOver ? t.accent : t.divider}`, overflow: "hidden", boxShadow: DS.shadow.sm, background: t.surface2 },
+        onDragOver: (e) => { e.preventDefault(); setDragOver(true); },
+        onDragLeave: () => setDragOver(false),
+        onDrop: handleDrop,
+      }, [
+        h("canvas", {
+          key: "cv", ref: canvasRef, style: { width: "100%", height: "100%", display: "block", cursor: dragRef.current ? "grabbing" : "grab" },
+          onWheel: handleWheel, onMouseDown: handleMouseDown, onMouseMove: handleMouseMove, onMouseUp: handleMouseUp, onMouseLeave: handleMouseUp,
+        }),
+        !fileInfo && h("div", { key: "empty", style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: DS.spacing.md, color: t.muted, fontSize: DS.font.size.base, pointerEvents: "none", textAlign: "center", padding: DS.spacing.xl } }, [
+          Ico.image({ size: 32 }),
+          h("div", { key: 1 }, "AI / PDF / SVG 파일을 여기에 드래그하거나"),
+          h("div", { key: 2 }, "'파일 불러오기' 버튼을 눌러 시작하세요"),
+        ]),
+        fileInfo && h("div", { key: "zoom", style: { position: "absolute", right: DS.spacing.lg, bottom: DS.spacing.lg, display: "flex", gap: DS.spacing.xs, background: t.surface, border: `1px solid ${t.divider}`, borderRadius: DS.radius.md, padding: DS.spacing.xs, boxShadow: DS.shadow.md } }, [
+          IconBtn(t, Ico.plus, () => zoomBy(1.25)),
+          IconBtn(t, Ico.arrowDown, () => zoomBy(0.8)),
+          Btn(t, { key: 3, variant: "ghost", onClick: fitToView, style: { fontSize: DS.font.size.xs } }, "화면맞춤"),
+        ]),
+        fileInfo && h("div", { key: "fname", style: { position: "absolute", left: DS.spacing.lg, top: DS.spacing.lg, background: t.surface, border: `1px solid ${t.divider}`, borderRadius: DS.radius.md, padding: `${DS.spacing.xs}px ${DS.spacing.md}px`, fontSize: DS.font.size.xs, color: t.muted, boxShadow: DS.shadow.sm } }, `${fileInfo.filename} · 실제 크기 ${scaledPageSize.widthMM.toFixed(0)}×${scaledPageSize.heightMM.toFixed(0)}mm`),
+      ]),
+      // 분석 패널 — 실무 정보 중심
+      h("div", { key: "panel", style: { flex: 1, minWidth: 280, display: "flex", flexDirection: "column", gap: DS.spacing.md } }, [
+        h("div", { key: "product", style: { display: "flex", flexDirection: "column", gap: DS.spacing.xs } }, [
+          h("span", { key: "l", style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.semibold } }, "제품 선택"),
+          Sel(t, {
+            key: "s", value: selectedChannelId, onChange: (e) => setSelectedChannelId(e.target.value),
+          }, [{ value: "", label: `자동 추천 (평균 ${Math.round(avgSizeMm)}각에 가장 가까운 상품)` }]
+            .concat(channelOptions.map((p) => ({ value: p.id, label: `${p.name}${p.sub ? " · " + p.sub : ""} ${p.spec || ""} (${num(p.price)}원)` })))),
+        ]),
+        Stat("도면 축척", scaleLabel, ""),
+        Stat("실제 크기", `${scaledPageSize.widthMM.toFixed(0)}×${scaledPageSize.heightMM.toFixed(0)}`, "mm"),
+        Stat("글자수", num(analysis.count), "개"),
+        Stat("평균 글자 높이", num(Math.round(avgSizeMm)), "각(mm)", true),
+        Stat("평균 획폭", analysis.avgStrokeWidth.toFixed(1), "mm"),
+        Stat("총 절곡길이", (analysis.totalPerimeter / 1000).toFixed(2), "m"),
+        Stat("총 면적", (analysis.totalArea / 1e6).toFixed(3), "㎡"),
+        analysis.count > 0 && h("div", { key: "extra", style: { fontSize: DS.font.size.xs, color: t.muted, padding: `0 ${DS.spacing.xs}px` } }, `내부 공간 평균 ${(analysis.avgInternalSpace / 1e6).toFixed(4)}㎡ · 글자간 간격 평균 ${analysis.avgGap.toFixed(1)}mm`),
+        analysis.count > 0 && Card(t, { key: "list", style: { padding: 0, boxShadow: DS.shadow.sm, maxHeight: 220, overflowY: "auto" } }, [
+          h("table", { key: 1, style: { width: "100%", borderCollapse: "collapse", fontSize: DS.font.size.xs, fontFamily: MONO } }, [
+            h("thead", { key: 1 }, h("tr", {}, [
+              h("th", { key: 1, style: { textAlign: "left", padding: DS.spacing.sm, color: t.muted, position: "sticky", top: 0, background: t.surface } }, "#"),
+              h("th", { key: 2, style: { textAlign: "right", padding: DS.spacing.sm, color: t.muted, position: "sticky", top: 0, background: t.surface } }, "가로"),
+              h("th", { key: 3, style: { textAlign: "right", padding: DS.spacing.sm, color: t.muted, position: "sticky", top: 0, background: t.surface } }, "세로"),
+              h("th", { key: 4, style: { textAlign: "right", padding: DS.spacing.sm, color: t.muted, position: "sticky", top: 0, background: t.surface } }, "각수"),
+            ])),
+            h("tbody", { key: 2 }, orderedGlyphs.map((g, order) => h("tr", {
+              key: g._idx,
+              onClick: () => setSelectedIndex(g._idx),
+              style: { cursor: "pointer", background: selectedIndex === g._idx ? t.accentSoft : "transparent", borderTop: `1px solid ${t.divider}` },
+            }, [
+              h("td", { key: 1, style: { padding: DS.spacing.sm, color: selectedIndex === g._idx ? t.accent : t.ink } }, order + 1),
+              h("td", { key: 2, style: { padding: DS.spacing.sm, textAlign: "right" } }, g.width.toFixed(1)),
+              h("td", { key: 3, style: { padding: DS.spacing.sm, textAlign: "right" } }, g.height.toFixed(1)),
+              h("td", { key: 4, style: { padding: DS.spacing.sm, textAlign: "right" } }, g.segmentCount),
+            ]))),
+          ]),
+        ]),
+        selectedShape && Card(t, { key: "sel", style: { padding: DS.spacing.lg, borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
+          h("div", { key: 1, style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.accent, marginBottom: DS.spacing.sm } }, `선택된 글자 #${selectedIndex + 1}`),
+          h("div", { key: 2, style: { fontSize: DS.font.size.sm, color: t.ink, lineHeight: 1.9, fontFamily: MONO } }, [
+            `실제 가로 × 세로: ${selectedShape.width.toFixed(1)} × ${selectedShape.height.toFixed(1)} mm`,
+            h("br", { key: "b1" }),
+            `면적: ${(selectedShape.area / 1e6).toFixed(4)} ㎡`,
+            h("br", { key: "b2" }),
+            `외곽길이(=절곡길이): ${(selectedShape.perimeter / 1000).toFixed(3)} m`,
+            h("br", { key: "b3" }),
+            `채널 각수(Segment): ${selectedShape.segmentCount}`,
+            h("br", { key: "b4" }),
+            `획폭(추정): ${selectedShape.strokeWidthEstimate.toFixed(1)}mm`,
+          ]),
+        ]),
+        // 예상 품목/단가 미리보기 — 제품 선택(또는 단가표 자체)이 바뀌면 그 즉시 다시 계산되어
+        // "견적으로 보내기"를 누르기 전에 LED/SMPS/조립/전선/실리콘 단가가 자동으로 바뀌는 것을
+        // 눈으로 확인할 수 있다.
+        previewItems.length > 0 && Card(t, { key: "preview", style: { padding: 0, boxShadow: DS.shadow.sm } }, [
+          h("div", { key: "h", style: { padding: `${DS.spacing.sm}px ${DS.spacing.md}px`, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, color: t.muted, borderBottom: `1px solid ${t.divider}` } }, "예상 품목 (단가표 기준 자동계산)"),
+          h("div", { key: "rows", style: { display: "flex", flexDirection: "column" } }, previewItems.map((it, i) => h("div", {
+            key: it.id, style: { display: "flex", justifyContent: "space-between", gap: DS.spacing.sm, padding: `${DS.spacing.xs}px ${DS.spacing.md}px`, fontSize: DS.font.size.xs, borderTop: i ? `1px solid ${t.divider}` : "none" },
+          }, [
+            h("span", { key: 1, style: { color: t.ink } }, it.name.replace(" (도면 분석 자동생성)", "")),
+            h("span", { key: 2, style: { color: it.unitPrice > 0 ? t.ink : t.muted, fontFamily: MONO } }, it.unitPrice > 0 ? `${num(it.unitPrice)}원 × ${it.qty}${it.unit}` : "단가 없음"),
+          ]))),
+        ]),
+        h("div", { key: "actions", style: { display: "flex", flexDirection: "column", gap: DS.spacing.sm, marginTop: DS.spacing.sm } }, [
+          Btn(t, { key: 1, variant: "primary", onClick: handleSendToQuote, disabled: !analysis.count }, "견적으로 보내기"),
+          Btn(t, { key: 2, variant: "ghost", onClick: handleExportDxf, disabled: !analysis.count }, "DXF Export (레이저 생산용)"),
+        ]),
+        toast && h("div", { key: "toast", style: { fontSize: DS.font.size.sm, color: t.green, fontWeight: DS.font.weight.semibold, textAlign: "center" } }, toast),
+      ]),
+    ]),
+    analysis.count > 0 && h("div", { key: "note", style: { fontSize: DS.font.size.sm, color: t.muted, padding: `0 ${DS.spacing.xs}px` } }, "* 글자 수는 서로 맞닿거나 겹치는 조각을 하나로 묶어 계산한 실제 글자(Object) 기준입니다. 채널 각수는 Version 1(Path Segment 개수 기준) 계산이며, 획폭/내부공간/글자간격은 형상 기반 추정값입니다. 채널·갈바·조립비 등 자동생성 품목의 단가는 제안값이므로 견적 계산기에서 자유롭게 수정할 수 있습니다."),
+  ]);
+}
+
+/* ==================================================================== */
 /*  5. 거래처 · 단가 DB 관리                                              */
 /* ==================================================================== */
 function DatabaseManager(props) {
@@ -2291,6 +2767,7 @@ const NAV = [
   { id: "quote", label: "견적 계산기", icon: Ico.calc },
   { id: "brief", label: "시안 의뢰서", icon: Ico.file },
   { id: "led", label: "LED 계산기", icon: Ico.zap },
+  { id: "drawing", label: "AI 도면 분석", icon: Ico.image },
   { id: "dashboard", label: "프로젝트 대시보드", icon: Ico.grid },
   { id: "db", label: "거래처 · 단가", icon: Ico.book },
 ];
@@ -2720,6 +3197,8 @@ function App() {
   const [settingsSection, setSettingsSection] = useState("company"); // 설정 페이지 진입 시 열릴 섹션
   const [openQuoteId, setOpenQuoteId] = useState(null);
   const openQuoteInCalculator = (quoteId) => { setOpenQuoteId(quoteId); setTab("quote"); };
+  const [pendingQuoteItems, setPendingQuoteItems] = useState(null);
+  const sendDrawingItemsToQuote = (items) => { setPendingQuoteItems(items); setTab("quote"); };
   const openSettings = (sectionId) => { setSettingsSection(sectionId); setTab("settings"); };
 
   const checkLicense = async () => {
@@ -2890,9 +3369,10 @@ function App() {
     ]),
     // 콘텐츠
     h("div", { key: "main", style: { flex: 1, padding: DS.spacing.xxxl + DS.spacing.xs, overflowY: "auto" } }, [
-      tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, onSaveCompany: saveCompany, presetLabel, vendors, loadVendorPresets, openQuoteId, onOpenQuoteHandled: () => setOpenQuoteId(null) }),
+      tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, onSaveCompany: saveCompany, presetLabel, vendors, loadVendorPresets, openQuoteId, onOpenQuoteHandled: () => setOpenQuoteId(null), pendingItems: pendingQuoteItems, onPendingItemsHandled: () => setPendingQuoteItems(null) }),
       tab === "brief" && h(DesignBrief, { key: "b", theme: t, company }),
       tab === "led" && h(LedCalculator, { key: "l", theme: t }),
+      tab === "drawing" && h(DrawingAnalyzer, { key: "va", theme: t, presets, onSendToQuote: sendDrawingItemsToQuote }),
       tab === "dashboard" && h(ProjectDashboard, { key: "d", theme: t, onOpenQuote: openQuoteInCalculator }),
       tab === "db" && h(DatabaseManager, { key: "db", theme: t, presets, onPresetsChange: changePresets, presetLabel, onPresetLabelChange: changePresetLabel, vendors, onAddVendor: addVendor, onRemoveVendor: removeVendor, loadVendorPresets, saveVendorPresets }),
       tab === "settings" && h(SettingsPage, { key: "settings", theme: t, initialSection: settingsSection, company, onSaveCompany: saveCompany, vendors, license, onActivated: checkLicense, appTheme: mode, onChangeAppTheme: changeTheme }),

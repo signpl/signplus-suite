@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("storage", {
   get: async (key) => {
@@ -22,6 +22,10 @@ contextBridge.exposeInMainWorld("api", {
   exportExcel: (sheets, filename) => ipcRenderer.invoke("export-excel", sheets, filename),
   exportPdf: (html, filename) => ipcRenderer.invoke("export-pdf", html, filename),
   pickImage: () => ipcRenderer.invoke("pick-image"),
+  pickDrawingFile: () => ipcRenderer.invoke("drawing-pick-file"),
+  readDrawingPath: (filePath) => ipcRenderer.invoke("drawing-read-path", filePath),
+  exportDrawingDxf: (shapes, heightMM, filename) => ipcRenderer.invoke("drawing-export-dxf", shapes, heightMM, filename),
+  getPathForFile: (file) => webUtils.getPathForFile(file),
 });
 
 contextBridge.exposeInMainWorld("license", {

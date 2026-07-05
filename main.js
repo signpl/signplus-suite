@@ -5,6 +5,8 @@ const ExcelJS = require("exceljs");
 const { createLicenseService } = require("./services/licenseService.js");
 const { createSqliteProvider } = require("./providers/sqliteProvider.js");
 const { createKvRepository } = require("./repositories/kvRepository.js");
+const { parsePdfVectors } = require("./services/pdfVectorParser.js");
+const { buildDxf } = require("./services/dxfExport.js");
 
 // userData 경로(app.getPath("userData"))는 app.getName()에 따라 결정된다. 이름을 명시적으로
 // 고정하지 않으면 실행 방식(개발 중 "electron ."과 패키징된 설치본)에 따라 다른 이름으로 해석될
@@ -421,6 +423,60 @@ ipcMain.handle("pick-image", async () => {
     return `data:image/${mime};base64,${buf.toString("base64")}`;
   } catch {
     return null;
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/*  AI 도면 분석 — AI(PDF 호환)/PDF/SVG 파일을 읽어 벡터 Path를 추출.       */
+/*  SVG는 DOM(getCTM/getTotalLength) 기반 파싱이 필요해 렌더러에서          */
+/*  SvgVectorParser로 처리하고, 여기서는 원본 텍스트만 넘긴다. AI/PDF는     */
+/*  Node의 zlib이 필요해 PdfVectorParser(services/)로 이 프로세스에서      */
+/*  직접 파싱한다.                                                        */
+/* ------------------------------------------------------------------ */
+function readDrawingFile(filePath) {
+  try {
+    const ext = path.extname(filePath).slice(1).toLowerCase();
+    if (ext === "svg") {
+      const text = fs.readFileSync(filePath, "utf-8");
+      return { ok: true, type: "svg", filename: path.basename(filePath), text };
+    }
+    if (ext === "pdf" || ext === "ai") {
+      const buf = fs.readFileSync(filePath);
+      const data = parsePdfVectors(buf);
+      return { ok: true, type: "pdf", filename: path.basename(filePath), data };
+    }
+    return { ok: false, error: "지원하지 않는 파일 형식입니다 (AI/PDF/SVG만 지원)." };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+}
+
+ipcMain.handle("drawing-pick-file", async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: "도면 파일 선택",
+    properties: ["openFile"],
+    filters: [{ name: "도면 파일", extensions: ["ai", "pdf", "svg"] }],
+  });
+  if (canceled || !filePaths[0]) return { ok: false, canceled: true };
+  return readDrawingFile(filePaths[0]);
+});
+
+ipcMain.handle("drawing-read-path", async (_e, filePath) => readDrawingFile(filePath));
+
+ipcMain.handle("drawing-export-dxf", async (_e, shapes, heightMM, filename) => {
+  try {
+    const dxfText = buildDxf(shapes, heightMM);
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: "DXF 저장 (레이저 생산용)",
+      defaultPath: `${(filename || "도면분석").replace(/[\\/:*?"<>|]/g, "_")}.dxf`,
+      filters: [{ name: "DXF 파일", extensions: ["dxf"] }],
+    });
+    if (canceled || !filePath) return { ok: false, canceled: true };
+    fs.writeFileSync(filePath, dxfText, "utf-8");
+    return { ok: true, path: filePath };
+  } catch (err) {
+    console.error("[drawing-export-dxf] 오류:", err);
+    return { ok: false, error: String((err && err.message) || err) };
   }
 });
 
