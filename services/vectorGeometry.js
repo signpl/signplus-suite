@@ -236,14 +236,29 @@
     return { paths, holes };
   }
 
+  // Character Engine 디버그 모드 — DEBUG_CHARACTER_MERGE=true 일 때만 동작하고, 그 외에는
+  // 아래 debugLog가 즉시 return해 릴리즈 빌드에서 완전히 비활성화된다(콘솔 출력 없음, 성능
+  // 영향 없음). 렌더러(브라우저 전역 window.DEBUG_CHARACTER_MERGE)와 Node(main 프로세스의
+  // process.env.DEBUG_CHARACTER_MERGE) 양쪽에서 켤 수 있다.
+  function isCharacterMergeDebugEnabled() {
+    if (typeof window !== "undefined" && window.DEBUG_CHARACTER_MERGE) return true;
+    if (typeof process !== "undefined" && process.env && process.env.DEBUG_CHARACTER_MERGE === "true") return true;
+    return false;
+  }
+  function debugLog(...args) {
+    if (!isCharacterMergeDebugEnabled()) return;
+    console.log("[CharacterEngine]", ...args);
+  }
+
   // 2~4단계 — candidates 간 완전 그래프에서 mergeDistance(여러 Feature를 종합한 거리)가 가장
   // 가까운 간선부터 최소신장트리(MST, Kruskal)를 만든다. 병합 여부를 가르는 고정 숫자 임계값은
   // 쓰지 않는다 — 실제 union에 쓰인 간선들을 오름차순으로 늘어놓고, 배율(비율) 기준으로 가장
   // 크게 벌어지는 지점까지만 실제로 병합한다(이 도면 자체의 거리 분포에서 구하는 적응형 컷).
-  // union/find는 호출측(groupIntoGlyphs)의 것을 그대로 받아 공유한다.
+  // union/find는 호출측(groupIntoGlyphs)의 것을 그대로 받아 공유한다. 디버그 모드에서 참조할 수
+  // 있도록 실제 병합(accepted)/병합 안 한(rejected) 간선 목록과 컷 임계값을 반환한다.
   function mergeByAdaptiveFeatureGap(candidates, shapes, boxes, scale, find, union) {
     const m = candidates.length;
-    if (m <= 1) return;
+    if (m <= 1) return { acceptedEdges: [], rejectedEdges: [], cutThreshold: null };
     const edges = [];
     for (let a = 0; a < m; a++) {
       for (let b = a + 1; b < m; b++) {
@@ -266,8 +281,11 @@
         if (joined === m) break;
       }
     }
-    if (!mstEdges.length) return;
-    if (mstEdges.length === 1) { union(mstEdges[0][1], mstEdges[0][2]); return; }
+    if (!mstEdges.length) return { acceptedEdges: [], rejectedEdges: [], cutThreshold: null };
+    if (mstEdges.length === 1) {
+      union(mstEdges[0][1], mstEdges[0][2]);
+      return { acceptedEdges: mstEdges, rejectedEdges: [], cutThreshold: mstEdges[0][0] };
+    }
 
     // 배율(ratio) 계산 기준값(eps) — 0(맞닿은 자소)과 작은 양수 거리가 섞여 있을 때, eps를 이
     // 도면에 실제로 존재하는 "가장 작은 양수 거리"와 같은 눈금으로 잡아야 0→작은값 전환이
@@ -281,6 +299,7 @@
       if (ratio > biggestRatio) { biggestRatio = ratio; cutIdx = k - 1; }
     }
     for (let k = 0; k <= cutIdx; k++) union(mstEdges[k][1], mstEdges[k][2]);
+    return { acceptedEdges: mstEdges.slice(0, cutIdx + 1), rejectedEdges: mstEdges.slice(cutIdx + 1), cutThreshold: mstEdges[cutIdx][0] };
   }
 
   function groupIntoGlyphs(shapes) {
@@ -313,9 +332,15 @@
     // 반영되고, 단독으로 병합 여부를 확정하지 않는다(groupKey 단위가 실제 글자와 다르게 잡히는
     // 도면에서도 다른 Feature로 보완되도록).
     const candidates = [];
-    for (let i = 0; i < n; i++) if (!isExcluded(i)) candidates.push(i);
+    const excludedReasons = [];
+    for (let i = 0; i < n; i++) {
+      if (isExcluded(i)) { excludedReasons.push([i, isFullPage(boxes[i]) ? "배경/아트보드(전체 도면의 70% 이상)" : isTiny(i) ? "이상치(너무 작음)" : "이상치(너무 큼)"]); continue; }
+      candidates.push(i);
+    }
     const scale = medH > 0 ? medH : (median(candidates.map((i) => Math.max(boxes[i].width, boxes[i].height)).filter((v) => v > 0)) || 1);
-    mergeByAdaptiveFeatureGap(candidates, list, boxes, scale, find, union);
+    const debugOn = isCharacterMergeDebugEnabled();
+    if (debugOn) debugLog(`입력 Path 수: ${n}, 제외: ${excludedReasons.length}, 병합 후보: ${candidates.length}, 기준 크기(scale): ${scale.toFixed(2)}`);
+    const mergeResult = mergeByAdaptiveFeatureGap(candidates, list, boxes, scale, find, union);
 
     const groups = new Map();
     for (let i = 0; i < n; i++) {
@@ -324,8 +349,27 @@
       if (!groups.has(root)) groups.set(root, []);
       groups.get(root).push(i);
     }
+    const groupList = Array.from(groups.values());
 
-    return buildCharacters(list, Array.from(groups.values()));
+    if (debugOn) {
+      debugLog(`적응형 컷 임계값(거리): ${mergeResult.cutThreshold == null ? "N/A" : mergeResult.cutThreshold.toFixed(3)}`);
+      for (const [i, reason] of excludedReasons) debugLog(`제외된 Path #${i}: ${reason}`);
+      groupList.forEach((idxs, k) => {
+        const memberScores = mergeResult.acceptedEdges.filter(([, i, j]) => idxs.includes(i) && idxs.includes(j));
+        const merged = idxs.length > 1;
+        debugLog(`--- Character #${k + 1} ---`);
+        debugLog(`  병합 전 Path 수(후보 전체): ${candidates.length}`);
+        debugLog(`  병합 후 Path 수(이 Character로 합쳐진 조각): ${idxs.length} (원본 인덱스: ${idxs.join(",")})`);
+        debugLog(`  Merge Score(이 Character 내부 병합 거리): ${memberScores.map(([d]) => d.toFixed(3)).join(", ") || "(단일 조각 — 병합 없음)"}`);
+        debugLog(`  병합 성공 여부: ${merged}`);
+        if (!merged) {
+          const nearest = mergeResult.rejectedEdges.find(([, i, j]) => i === idxs[0] || j === idxs[0]);
+          debugLog(`  병합 실패 이유: ${nearest ? `가장 가까운 후보(거리 ${nearest[0].toFixed(3)})가 적응형 컷 임계값(${mergeResult.cutThreshold.toFixed(3)})을 초과함` : "비교할 다른 후보 없음"}`);
+        }
+      });
+    }
+
+    return buildCharacters(list, groupList);
   }
 
   // 5) Character 객체 생성 — 이 배열이 이후 모든 계산(집계/견적/치수)의 기준이 된다.
