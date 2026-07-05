@@ -143,16 +143,15 @@
   //      PDF는 하나의 채우기 연산(f/f*/B/...)까지 그려진 모든 서브패스를, SVG는 <path> 하나의
   //      d 속성 안에 담긴 모든 서브패스를 이미 "하나의 도형(shape)"으로 묶어서 넘겨준다 —
   //      외곽선+구멍(속칸)이 한 글자 안에서 이미 올바르게 하나로 묶여 있다는 뜻이다.
-  //   2) Group 분석 — 파서가 SVG의 <g> 조상 또는 PDF의 q/Q 중첩 구간에서 판별해 넘겨준
-  //      groupKey("같은 글자" 신호)가 있으면 최우선으로 신뢰한다(아래 0단계).
-  //   3~4) Bounding Box 병합 / 같은 글자의 Path 병합 — groupKey가 없는 도형은 간격(gap)이 가까운
-  //      순서대로 최소신장트리(MST, Kruskal)를 만들고, 간선 가중치가 오름차순으로 이어지는
-  //      도중 배율(비율) 기준으로 가장 크게 벌어지는 지점 바로 앞까지를 "같은 글자 내부 간격"
-  //      으로 본다. 초성/중성/종성처럼 획끼리 아예 겹치지 않는 자소도 같은 글자 안에서는 간격이
-  //      촘촘하고, 서로 다른 글자 사이의 자간은 그보다 뚜렷하게 넓다는 실무 관례를 이용한다 —
-  //      절대 차이가 아니라 배율로 판정해 자소 1개짜리 홑글자 옆 여백 같은 이상치에도 흔들리지
-  //      않는다(도면마다 실제 글자 크기·자간이 달라도 고정 숫자 없이 이 도면 자체에서 임계값을
-  //      구한다).
+  //   2~4) Feature 기반 병합 — groupKey(Group/CompoundPath 신호) 하나만으로 병합을 결정하지
+  //      않는다. Illustrator 아웃라인 구조·폰트마다 그룹/컴파운드패스 단위가 실제 "글자"와
+  //      다르게 잡힐 수 있어(예: 획 하나하나가 각각 별도 그룹으로 내보내지는 경우), groupKey를
+  //      유일한 진실로 신뢰하면 오히려 병합이 전혀 안 되는 상황이 생길 수 있다. 그래서 여러
+  //      Feature(Bounding Box Overlap/Containment, Center Distance, Height Similarity,
+  //      Baseline Alignment, Group/CompoundPath 신호, Hole 관계, Path 간 접촉 여부=간격)를
+  //      모두 반영해 "병합 거리"를 계산하고(mergeDistance), 이 도면 자체의 거리 분포에서
+  //      배율(비율) 기준으로 가장 크게 벌어지는 지점까지만 실제로 병합한다(적응형 컷 —
+  //      고정 숫자 임계값을 쓰지 않는다).
   //   5) Character 객체 생성 — { bbox, center, width, height, paths, holes, segments } 로
   //      반환한다. Path/Segment는 이 단계 이후로는 "각수" 계산 등 보조 용도로만 쓰고, 글자수·
   //      집계·단가 계산 등 모든 계산은 이 Character 배열을 기준으로 한다.
@@ -161,6 +160,63 @@
     const dx = Math.max(a.minX - b.maxX, b.minX - a.maxX, 0);
     const dy = Math.max(a.minY - b.maxY, b.minY - a.maxY, 0);
     return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function bboxAreaOf(b) { return Math.max(0, b.width) * Math.max(0, b.height); }
+  function bboxOverlapArea(a, b) {
+    const ox = Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX));
+    const oy = Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY));
+    return ox * oy;
+  }
+  function bboxCenterOf(b) { return [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2]; }
+  // 도형 하나의 지배적 권취 방향(가장 넓은 서브패스 기준) — 구멍/외곽 관계 판정용.
+  function dominantWindingSign(shape) {
+    const subpaths = shape.subpaths || [];
+    let bestAbs = -1, bestSign = 1;
+    for (const sp of subpaths) {
+      const a = signedAreaOfPoints(sp.points);
+      if (Math.abs(a) > bestAbs) { bestAbs = Math.abs(a); bestSign = a >= 0 ? 1 : -1; }
+    }
+    return bestSign;
+  }
+
+  // 두 도형 사이의 "병합 거리"를 여러 Feature로 함께 계산한다 — 실제 좌표 간격(gap) 하나만
+  // 보지 않고, 아래 Feature들을 종합한 보너스만큼 그 간격을 줄여서(같은 글자일 가능성이 높을수록
+  // 더 가깝게 보이도록) 하나의 지표로 합친다:
+  //   Bounding Box Overlap/Containment, Center Distance, Height Similarity, Baseline
+  //   Alignment, Group/CompoundPath 신호, Hole 관계, Path 간 접촉 여부(간격 자체).
+  // scale은 이 도면의 전형적인 자소 크기(중앙값)로, 도면 배율·폰트 크기가 달라도 같은 기준으로
+  // 동작하도록 정규화한다. 어느 한 Feature도 단독으로 병합을 결정하지 않으며, 최종 병합 여부는
+  // 이렇게 합쳐진 거리들을 이 도면 자체의 분포에서 적응적으로 컷하는 mergeByAdaptiveFeatureGap이
+  // 정한다(고정 숫자 임계값 없음).
+  function bboxContainment(boxA, boxB) {
+    const areaA = bboxAreaOf(boxA), areaB = bboxAreaOf(boxB);
+    const minArea = Math.max(1e-6, Math.min(areaA, areaB) || 0);
+    return areaA > 0 && areaB > 0 ? Math.min(1, bboxOverlapArea(boxA, boxB) / minArea) : 0;
+  }
+  function mergeDistance(shapeA, shapeB, boxA, boxB, scale) {
+    const s = Math.max(scale, 1e-6);
+    const gap = rectGap(boxA, boxB); // Path 간 접촉 여부/근접(Connected Components)
+
+    const containment = bboxContainment(boxA, boxB); // Bounding Box Overlap/Containment, 0~1
+
+    const cA = bboxCenterOf(boxA), cB = bboxCenterOf(boxB);
+    const centerDist = Math.hypot(cA[0] - cB[0], cA[1] - cB[1]);
+    const centerCloseness = Math.max(0, 1 - centerDist / (s * 2.0)); // Center Distance, 0~1(가까울수록 1)
+
+    const hA = boxA.height || 0, hB = boxB.height || 0;
+    const heightSim = Math.max(hA, hB) > 0 ? 1 - Math.abs(hA - hB) / Math.max(hA, hB) : 1; // Height Similarity, 0~1
+
+    const baselineDiff = Math.abs(boxA.maxY - boxB.maxY);
+    const baselineAlign = Math.max(0, 1 - baselineDiff / (s * 1.2)); // Baseline Alignment, 0~1
+
+    const group = shapeA.groupKey && shapeB.groupKey && shapeA.groupKey === shapeB.groupKey ? 1 : 0; // Group/CompoundPath
+
+    const hole = containment > 0.8 && dominantWindingSign(shapeA) !== dominantWindingSign(shapeB) ? 1 : 0; // Hole 관계/외곽선 포함
+
+    // 같은 글자일 가능성을 높이는 신호(보너스)가 클수록 간격을 더 크게 나눠 "더 가깝게" 만든다.
+    const bonus = containment * 1.2 + centerCloseness * 0.6 + heightSim * 0.5 + baselineAlign * 0.5 + group * 2.5 + hole * 2.5;
+    return gap / (1 + bonus);
   }
 
   // 서브패스를 외곽선(paths)과 구멍(holes)으로 분류한다 — 절대 면적이 가장 큰 서브패스의
@@ -180,31 +236,32 @@
     return { paths, holes };
   }
 
-  // 3~4단계 — candidates 간 완전 그래프의 MST(Kruskal)를 만들고, 간선 가중치(간격)가 오름차순
-  // 으로 이어지는 도중 배율(비율) 기준으로 가장 크게 벌어지는 지점까지를 병합 임계값으로 삼아
-  // union(a,b)로 실제 병합한다. union/find는 호출측(groupIntoGlyphs)의 것을 그대로 받아 공유한다.
-  function mergeByAdaptiveGap(candidates, boxes, find, union) {
+  // 2~4단계 — candidates 간 완전 그래프에서 mergeDistance(여러 Feature를 종합한 거리)가 가장
+  // 가까운 간선부터 최소신장트리(MST, Kruskal)를 만든다. 병합 여부를 가르는 고정 숫자 임계값은
+  // 쓰지 않는다 — 실제 union에 쓰인 간선들을 오름차순으로 늘어놓고, 배율(비율) 기준으로 가장
+  // 크게 벌어지는 지점까지만 실제로 병합한다(이 도면 자체의 거리 분포에서 구하는 적응형 컷).
+  // union/find는 호출측(groupIntoGlyphs)의 것을 그대로 받아 공유한다.
+  function mergeByAdaptiveFeatureGap(candidates, shapes, boxes, scale, find, union) {
     const m = candidates.length;
     if (m <= 1) return;
     const edges = [];
     for (let a = 0; a < m; a++) {
       for (let b = a + 1; b < m; b++) {
         const i = candidates[a], j = candidates[b];
-        edges.push([rectGap(boxes[i], boxes[j]), i, j]);
+        edges.push([mergeDistance(shapes[i], shapes[j], boxes[i], boxes[j], scale), i, j]);
       }
     }
-    edges.sort((x, y) => x[0] - y[0]);
+    edges.sort((x, y) => x[0] - y[0]); // 거리 오름차순(가장 확실한 같은-글자 후보부터)
 
-    // MST 간선(가중치 오름차순)을 만들면서, 동시에 그 간선으로 실제 union할 (i,j) 쌍도 기록한다.
     const mstParent = new Map(candidates.map((i) => [i, i]));
     const mstFind = (x) => { while (mstParent.get(x) !== x) { mstParent.set(x, mstParent.get(mstParent.get(x))); x = mstParent.get(x); } return x; };
-    const mstEdges = []; // [weight, i, j] — 오름차순
+    const mstEdges = []; // [dist, i, j] — 오름차순
     let joined = 1;
-    for (const [w, i, j] of edges) {
+    for (const [dist, i, j] of edges) {
       const ri = mstFind(i), rj = mstFind(j);
       if (ri !== rj) {
         mstParent.set(ri, rj);
-        mstEdges.push([w, i, j]);
+        mstEdges.push([dist, i, j]);
         joined++;
         if (joined === m) break;
       }
@@ -212,11 +269,11 @@
     if (!mstEdges.length) return;
     if (mstEdges.length === 1) { union(mstEdges[0][1], mstEdges[0][2]); return; }
 
-    // 배율(ratio) 계산 기준값(eps) — 0(맞닿은 자소)과 작은 양수 간격이 섞여 있을 때, eps를
-    // 이 도면에 실제로 존재하는 "가장 작은 양수 간격"과 같은 눈금으로 잡아야 0→작은값 전환이
+    // 배율(ratio) 계산 기준값(eps) — 0(맞닿은 자소)과 작은 양수 거리가 섞여 있을 때, eps를 이
+    // 도면에 실제로 존재하는 "가장 작은 양수 거리"와 같은 눈금으로 잡아야 0→작은값 전환이
     // 진짜 경계(자간)보다 먼저 잘못 끊기지 않는다.
     let firstPositive = 0;
-    for (const [w] of mstEdges) { if (w > 0) { firstPositive = w; break; } }
+    for (const [d] of mstEdges) { if (d > 0) { firstPositive = d; break; } }
     const eps = firstPositive > 0 ? firstPositive : 1;
     let cutIdx = mstEdges.length - 1, biggestRatio = -1;
     for (let k = 1; k < mstEdges.length; k++) {
@@ -251,23 +308,18 @@
     const find = (x) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
     const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
 
-    // 0) groupKey가 같은 도형은 무조건 같은 글자로 병합(강한 신호, 기하 판정보다 우선)
-    const byGroupKey = new Map();
-    for (let i = 0; i < n; i++) {
-      const key = list[i].groupKey;
-      if (!key) continue;
-      if (!byGroupKey.has(key)) byGroupKey.set(key, i);
-      else union(i, byGroupKey.get(key));
-    }
-
-    // 1~4) groupKey가 없는 도형만 기하 기반(배경 제외 + 자동 간격 임계값 병합)으로 판정
-    const geometryCandidates = [];
-    for (let i = 0; i < n; i++) if (!list[i].groupKey && !isExcluded(i)) geometryCandidates.push(i);
-    mergeByAdaptiveGap(geometryCandidates, boxes, find, union);
+    // 배경/아트보드 테두리·이상치를 뺀 나머지 전부를 하나의 후보군으로 놓고 Feature Score로
+    // 병합한다 — groupKey(Group/CompoundPath 신호)는 mergeScore 안에서 여러 Feature 중 하나로만
+    // 반영되고, 단독으로 병합 여부를 확정하지 않는다(groupKey 단위가 실제 글자와 다르게 잡히는
+    // 도면에서도 다른 Feature로 보완되도록).
+    const candidates = [];
+    for (let i = 0; i < n; i++) if (!isExcluded(i)) candidates.push(i);
+    const scale = medH > 0 ? medH : (median(candidates.map((i) => Math.max(boxes[i].width, boxes[i].height)).filter((v) => v > 0)) || 1);
+    mergeByAdaptiveFeatureGap(candidates, list, boxes, scale, find, union);
 
     const groups = new Map();
     for (let i = 0; i < n; i++) {
-      if (!list[i].groupKey && isExcluded(i)) continue; // 배경/아트보드 테두리 등은 글자 수에서 제외
+      if (isExcluded(i)) continue; // 배경/아트보드 테두리 등은 글자 수에서 제외
       const root = find(i);
       if (!groups.has(root)) groups.set(root, []);
       groups.get(root).push(i);
