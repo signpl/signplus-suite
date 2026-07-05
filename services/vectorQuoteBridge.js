@@ -95,7 +95,7 @@
     if (o.glyphCount > 0) {
       items.push({
         id: genId(),
-        name: "채널 가공비 (도면 분석 자동생성)",
+        name: "채널 가공비",
         spec: `평균 ${Math.round(o.channelAvgSizeMm || 0)}각 · ${o.glyphCount}자`,
         unit: "개",
         unitPrice: Math.round(o.channelUnitPrice || 0),
@@ -104,7 +104,7 @@
       });
       items.push({
         id: genId(),
-        name: "갈바 원자재비 (도면 분석 자동생성)",
+        name: "갈바 원자재비",
         spec: "채널 가공비에 포함되지 않은 별도 원자재 필요 시 단가 입력",
         unit: "개",
         unitPrice: Math.round(o.galvaUnitPrice || 0),
@@ -113,7 +113,7 @@
       });
       items.push({
         id: genId(),
-        name: "조립비 (도면 분석 자동생성)",
+        name: "조립비",
         spec: `채널·아크릴·LED 조립 · ${o.glyphCount}자`,
         unit: "개",
         unitPrice: Math.round(o.generalAssemblyUnitPrice || 0),
@@ -125,7 +125,7 @@
     if (o.totalAreaSqM > 0) {
       items.push({
         id: genId(),
-        name: "아크릴 판넬 (도면 분석 자동생성)",
+        name: "아크릴 판넬",
         spec: `총 면적 ${o.totalAreaSqM.toFixed(2)}㎡`,
         unit: "㎡",
         unitPrice: Math.round(o.acrylicUnitPricePerSqM || 0),
@@ -137,7 +137,7 @@
     if (o.moduleCount > 0) {
       items.push({
         id: genId(),
-        name: `LED 모듈 (도면 분석 · 제작 기준 자동계산)`,
+        name: `LED 모듈`,
         spec: `${o.ledType || "3구 1W"} · 외곽길이 기준`,
         unit: "개",
         unitPrice: Math.round(o.moduleUnitPrice || 0),
@@ -146,7 +146,7 @@
       });
       items.push({
         id: genId(),
-        name: "LED 조립비 (도면 분석 자동생성)",
+        name: "LED 조립비",
         spec: "조립비 · 실리콘작업",
         unit: "개",
         unitPrice: Math.round(o.assemblyUnitPrice || 0),
@@ -158,7 +158,7 @@
     if (o.smpsQty > 0) {
       items.push({
         id: genId(),
-        name: "SMPS (도면 분석 자동생성)",
+        name: "SMPS",
         spec: `${o.smpsCap}개용 × ${o.smpsQty}`,
         unit: "개",
         unitPrice: Math.round(o.smpsUnitPrice || 0),
@@ -170,7 +170,7 @@
     if (o.wireLengthM > 0) {
       items.push({
         id: genId(),
-        name: "전선 (도면 분석 자동생성)",
+        name: "전선",
         spec: `LED 배선 · 예상 ${o.wireLengthM}m`,
         unit: "m",
         unitPrice: Math.round(o.wireUnitPrice || 0),
@@ -182,7 +182,7 @@
     if (o.siliconeQty > 0) {
       items.push({
         id: genId(),
-        name: "실리콘 (도면 분석 자동생성)",
+        name: "실리콘",
         spec: "LED 방수 포인팅",
         unit: "개",
         unitPrice: Math.round(o.siliconeUnitPrice || 0),

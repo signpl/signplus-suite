@@ -136,34 +136,56 @@
     return s[Math.floor(s.length / 2)];
   }
 
-  // 글자(실제 Object) 인식 — Path/Segment/SubPath 개수가 아니라 "실제 글자 하나"를 하나의
-  // 단위로 묶는다. 두 가지 신호를 함께 쓴다.
-  //   0) groupKey(파서가 SVG의 <g> 구조에서 판별해 넘겨준 "같은 글자" 신호) — 있으면 최우선으로
-  //      신뢰한다. 초성/중성/종성이 개별 도형으로 나뉜 한글처럼, 인접한 다른 글자와의 간격이 한
-  //      글자 내부 자소 간격과 비슷해 좌표만으로는 구분이 안 되는 경우에도 정확히 구분해준다.
-  //   1~3) groupKey가 없는 도형은 기존처럼 기하 정보로 판정한다 — 전체 도면의 70% 이상을 차지하는
-  //      배경/테두리 제외 → 배경 제외 도형만으로 다시 계산한 median 대비 지나치게 작거나 큰 도형
-  //      제외 → 남은 도형끼리 간격(gap)이 자동 임계값 이하이면 병합(겹치는 경우 포함, gap=0).
-  //      임계값은 고정 비율이 아니라 이 도면 자체의 간격 분포에서 구한다(최소신장트리 컷) —
-  //      초성/중성/종성처럼 획끼리 아예 겹치지 않는 자소도 같은 "각"(정사각형 셀) 안에서는
-  //      간격이 촘촘하고, 서로 다른 글자 사이의 자간은 그보다 뚜렷하게 넓다는 실무 관례상
-  //      두 간격대 사이에 뚜렷한 도약(jump)이 생기기 때문에, 글꼴 크기·각수와 무관하게
-  //      도면마다 자동으로 맞는 임계값을 구할 수 있다.
+  // ===================================================================
+  // Character 엔진 — 도면을 "획(Path)"이 아니라 "글자(Character)" 단위로 인식한다.
+  // 처리 순서:
+  //   1) CompoundPath 분석 — 파서(PdfVectorParser/SvgVectorParser) 단계에서 이미 끝나 있다.
+  //      PDF는 하나의 채우기 연산(f/f*/B/...)까지 그려진 모든 서브패스를, SVG는 <path> 하나의
+  //      d 속성 안에 담긴 모든 서브패스를 이미 "하나의 도형(shape)"으로 묶어서 넘겨준다 —
+  //      외곽선+구멍(속칸)이 한 글자 안에서 이미 올바르게 하나로 묶여 있다는 뜻이다.
+  //   2) Group 분석 — 파서가 SVG의 <g> 조상 또는 PDF의 q/Q 중첩 구간에서 판별해 넘겨준
+  //      groupKey("같은 글자" 신호)가 있으면 최우선으로 신뢰한다(아래 0단계).
+  //   3~4) Bounding Box 병합 / 같은 글자의 Path 병합 — groupKey가 없는 도형은 간격(gap)이 가까운
+  //      순서대로 최소신장트리(MST, Kruskal)를 만들고, 간선 가중치가 오름차순으로 이어지는
+  //      도중 배율(비율) 기준으로 가장 크게 벌어지는 지점 바로 앞까지를 "같은 글자 내부 간격"
+  //      으로 본다. 초성/중성/종성처럼 획끼리 아예 겹치지 않는 자소도 같은 글자 안에서는 간격이
+  //      촘촘하고, 서로 다른 글자 사이의 자간은 그보다 뚜렷하게 넓다는 실무 관례를 이용한다 —
+  //      절대 차이가 아니라 배율로 판정해 자소 1개짜리 홑글자 옆 여백 같은 이상치에도 흔들리지
+  //      않는다(도면마다 실제 글자 크기·자간이 달라도 고정 숫자 없이 이 도면 자체에서 임계값을
+  //      구한다).
+  //   5) Character 객체 생성 — { bbox, center, width, height, paths, holes, segments } 로
+  //      반환한다. Path/Segment는 이 단계 이후로는 "각수" 계산 등 보조 용도로만 쓰고, 글자수·
+  //      집계·단가 계산 등 모든 계산은 이 Character 배열을 기준으로 한다.
+  // ===================================================================
   function rectGap(a, b) {
     const dx = Math.max(a.minX - b.maxX, b.minX - a.maxX, 0);
     const dy = Math.max(a.minY - b.maxY, b.minY - a.maxY, 0);
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  // candidates: 병합 판정 대상 인덱스 목록. 이들 간의 완전 그래프에 대해 최소신장트리(MST,
-  // Kruskal)를 만들고, 간선 가중치(간격)가 오름차순으로 이어지는 도중 가장 크게 벌어지는
-  // 지점 바로 앞까지를 "같은 글자 내부 간격"으로 본다. 도약폭은 절대 차이가 아니라 배율
-  // (비율)로 판정한다 — 자간이 유독 넓은 도면 한두 곳(예: 자소 1개짜리 홑글자 옆의 여백)이
-  // 있어도 절대값 기준으로는 그 큰 값이 기준을 왜곡하지만, 배율 기준은 "촘촘한 무리"와
-  // "그보다 몇 배 넓은 무리" 사이의 경계만 찾으므로 이런 이상치에 흔들리지 않는다.
-  function autoMergeThreshold(candidates, boxes) {
+  // 서브패스를 외곽선(paths)과 구멍(holes)으로 분류한다 — 절대 면적이 가장 큰 서브패스의
+  // 권취 방향을 "외곽선" 기준으로 삼고, 반대 방향으로 감긴 서브패스만 구멍(예: "ㅁ","ㅇ"의
+  // 속칸)으로 본다.
+  function classifySubpaths(subpaths) {
+    const list = subpaths || [];
+    if (!list.length) return { paths: [], holes: [] };
+    const withArea = list.map((sp) => ({ sp, area: signedAreaOfPoints(sp.points) }));
+    const dominant = withArea.reduce((a, b) => (Math.abs(b.area) > Math.abs(a.area) ? b : a));
+    const dominantSign = dominant.area >= 0 ? 1 : -1;
+    const paths = [], holes = [];
+    for (const { sp, area } of withArea) {
+      if (area === 0 || (area >= 0 ? 1 : -1) === dominantSign) paths.push(sp);
+      else holes.push(sp);
+    }
+    return { paths, holes };
+  }
+
+  // 3~4단계 — candidates 간 완전 그래프의 MST(Kruskal)를 만들고, 간선 가중치(간격)가 오름차순
+  // 으로 이어지는 도중 배율(비율) 기준으로 가장 크게 벌어지는 지점까지를 병합 임계값으로 삼아
+  // union(a,b)로 실제 병합한다. union/find는 호출측(groupIntoGlyphs)의 것을 그대로 받아 공유한다.
+  function mergeByAdaptiveGap(candidates, boxes, find, union) {
     const m = candidates.length;
-    if (m <= 1) return 0;
+    if (m <= 1) return;
     const edges = [];
     for (let a = 0; a < m; a++) {
       for (let b = a + 1; b < m; b++) {
@@ -172,41 +194,43 @@
       }
     }
     edges.sort((x, y) => x[0] - y[0]);
-    const parent = new Map(candidates.map((i) => [i, i]));
-    const find = (x) => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
-    const mstWeights = [];
+
+    // MST 간선(가중치 오름차순)을 만들면서, 동시에 그 간선으로 실제 union할 (i,j) 쌍도 기록한다.
+    const mstParent = new Map(candidates.map((i) => [i, i]));
+    const mstFind = (x) => { while (mstParent.get(x) !== x) { mstParent.set(x, mstParent.get(mstParent.get(x))); x = mstParent.get(x); } return x; };
+    const mstEdges = []; // [weight, i, j] — 오름차순
     let joined = 1;
     for (const [w, i, j] of edges) {
-      const ri = find(i), rj = find(j);
+      const ri = mstFind(i), rj = mstFind(j);
       if (ri !== rj) {
-        parent.set(ri, rj);
-        mstWeights.push(w);
+        mstParent.set(ri, rj);
+        mstEdges.push([w, i, j]);
         joined++;
         if (joined === m) break;
       }
     }
-    if (!mstWeights.length) return 0;
-    if (mstWeights.length === 1) return mstWeights[0];
-    // 배율(ratio) 계산의 기준값(eps) — 0(맞닿은 자소)과 작은 양수 간격(예: 5)이 섞여 있을 때,
-    // eps를 전체 최댓값 기준의 아주 작은 값으로 두면 "0 → 5" 전환 자체가 무한대에 가까운
-    // 배율로 보여 실제 경계(자간)보다 먼저 잘못 끊긴다. 그래서 eps는 이 도면에 실제로 존재하는
-    // "가장 작은 양수 간격"과 같은 눈금으로 잡아, 0과 그 값 사이의 배율이 다른 진짜 경계의
-    // 배율보다 작게 나오도록 한다(양수 간격이 전혀 없으면 전부 맞닿아 있다는 뜻이라 1로 둬도 무해).
+    if (!mstEdges.length) return;
+    if (mstEdges.length === 1) { union(mstEdges[0][1], mstEdges[0][2]); return; }
+
+    // 배율(ratio) 계산 기준값(eps) — 0(맞닿은 자소)과 작은 양수 간격이 섞여 있을 때, eps를
+    // 이 도면에 실제로 존재하는 "가장 작은 양수 간격"과 같은 눈금으로 잡아야 0→작은값 전환이
+    // 진짜 경계(자간)보다 먼저 잘못 끊기지 않는다.
     let firstPositive = 0;
-    for (const w of mstWeights) { if (w > 0) { firstPositive = w; break; } }
+    for (const [w] of mstEdges) { if (w > 0) { firstPositive = w; break; } }
     const eps = firstPositive > 0 ? firstPositive : 1;
-    let cutIdx = mstWeights.length - 1, biggestRatio = -1;
-    for (let k = 1; k < mstWeights.length; k++) {
-      const ratio = (mstWeights[k] + eps) / (mstWeights[k - 1] + eps);
+    let cutIdx = mstEdges.length - 1, biggestRatio = -1;
+    for (let k = 1; k < mstEdges.length; k++) {
+      const ratio = (mstEdges[k][0] + eps) / (mstEdges[k - 1][0] + eps);
       if (ratio > biggestRatio) { biggestRatio = ratio; cutIdx = k - 1; }
     }
-    return mstWeights[cutIdx];
+    for (let k = 0; k <= cutIdx; k++) union(mstEdges[k][1], mstEdges[k][2]);
   }
 
   function groupIntoGlyphs(shapes) {
     const list = shapes || [];
     const n = list.length;
-    if (n <= 1) return list;
+    if (n === 0) return [];
+    if (n === 1) return buildCharacters(list, [[0]]);
 
     const stats = list.map(statsOfShape);
     const boxes = stats.map((s) => s.bbox);
@@ -236,16 +260,10 @@
       else union(i, byGroupKey.get(key));
     }
 
-    // 1~3) groupKey가 없는 도형만 기하 기반(배경 제외 + 자동 간격 임계값)으로 판정
+    // 1~4) groupKey가 없는 도형만 기하 기반(배경 제외 + 자동 간격 임계값 병합)으로 판정
     const geometryCandidates = [];
     for (let i = 0; i < n; i++) if (!list[i].groupKey && !isExcluded(i)) geometryCandidates.push(i);
-    const mergeGap = autoMergeThreshold(geometryCandidates, boxes);
-    for (let a = 0; a < geometryCandidates.length; a++) {
-      for (let b = a + 1; b < geometryCandidates.length; b++) {
-        const i = geometryCandidates[a], j = geometryCandidates[b];
-        if (rectGap(boxes[i], boxes[j]) <= mergeGap) union(i, j);
-      }
-    }
+    mergeByAdaptiveGap(geometryCandidates, boxes, find, union);
 
     const groups = new Map();
     for (let i = 0; i < n; i++) {
@@ -255,10 +273,31 @@
       groups.get(root).push(i);
     }
 
-    return Array.from(groups.values()).map((idxs) => ({
-      subpaths: idxs.reduce((acc, i) => acc.concat(list[i].subpaths || []), []),
-      segmentCount: idxs.reduce((s, i) => s + (list[i].segmentCount || 0), 0),
-    }));
+    return buildCharacters(list, Array.from(groups.values()));
+  }
+
+  // 5) Character 객체 생성 — 이 배열이 이후 모든 계산(집계/견적/치수)의 기준이 된다.
+  function buildCharacters(list, groups) {
+    return groups.map((idxs) => {
+      const subpaths = idxs.reduce((acc, i) => acc.concat(list[i].subpaths || []), []);
+      const segments = idxs.reduce((s, i) => s + (list[i].segmentCount || 0), 0);
+      let bbox = null;
+      for (const sp of subpaths) bbox = unionBbox(bbox, bboxOfPoints(sp.points));
+      bbox = bbox || { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
+      const { paths, holes } = classifySubpaths(subpaths);
+      return {
+        bbox,
+        center: [(bbox.minX + bbox.maxX) / 2, (bbox.minY + bbox.maxY) / 2],
+        width: bbox.width,
+        height: bbox.height,
+        paths,
+        holes,
+        segments,
+        // 하위 호환 — 기존 statsOfShape/DXF export/캔버스 렌더링이 그대로 쓰는 필드명 유지
+        subpaths,
+        segmentCount: segments,
+      };
+    });
   }
 
   const VectorGeometry = { bboxOfPoints, unionBbox, lengthOfPoints, signedAreaOfPoints, statsOfShape, aggregateShapes, groupIntoGlyphs };

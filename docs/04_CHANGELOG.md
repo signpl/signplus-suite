@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v3.12.1 Character 엔진 재구현 (글자 인식 정확도 개선)
+
+- `groupIntoGlyphs`를 명시적인 5단계 파이프라인(CompoundPath 분석 → Group 분석 → Bounding Box 병합 → 같은 글자 Path 병합 → Character 객체 생성)으로 재구성(`services/vectorGeometry.js`).
+- 각 글자(Character)는 이제 `{ bbox, center, width, height, paths, holes, segments }` 구조로 명시적으로 생성되며, 이후 모든 집계·단가·치수 계산은 이 Character 배열을 기준으로 한다 — Path/Segment는 각수 계산 등 보조 용도로만 쓰인다.
+- 서브패스를 외곽선(paths)과 구멍(holes)으로 자동 분류(권취 방향 기준)하는 로직 추가.
+- 병합 판정(간격 임계값)을 최소신장트리 기반으로 재정리 — 로직은 동일한 원리를 유지하되 구조를 단순화하고 중복 계산을 제거.
+- "평균 글자 높이"를 `max(가로,세로)`가 아니라 `Character.height`(세로 치수) 기준으로 계산하도록 수정.
+- 자동생성 견적 품목명에 붙던 "(도면 분석 자동생성)"/"(도면 분석 · 제작 기준 자동계산)" 문구를 제거 — 실제 견적서에 그대로 남아있던 문제 수정(미리보기 화면에서만 가려지고 실제 전송 품목에는 남아있었음).
+
 ## v3.12.0 AI 도면 분석 (신규)
 
 - AI(일러스트레이터 PDF 호환 저장)/PDF/SVG 도면을 불러와 벡터 Path를 추출하고, "획"이 아니라 "글자(Character)" 단위로 자동 인식하는 기능 추가(`services/pdfVectorParser.js`, `services/svgVectorParser.js`, `services/vectorGeometry.js`).

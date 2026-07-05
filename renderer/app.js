@@ -1692,7 +1692,8 @@ function DrawingAnalyzer(props) {
   // "실제 Object(글자)" 단위로 집계한다(services/vectorGeometry.js의 groupIntoGlyphs).
   const glyphShapes = useMemo(() => window.VectorGeometry.groupIntoGlyphs(scaledShapes), [scaledShapes]);
   const analysis = useMemo(() => window.VectorGeometry.aggregateShapes(glyphShapes), [glyphShapes]);
-  const avgSizeMm = useMemo(() => (analysis.count ? analysis.shapes.reduce((s, sh) => s + Math.max(sh.width, sh.height), 0) / analysis.count : 0), [analysis]);
+  // 평균 글자 높이 — Character.height(글자 하나의 실제 세로 치수) 기준. Path/Segment는 쓰지 않는다.
+  const avgSizeMm = useMemo(() => (analysis.count ? analysis.shapes.reduce((s, sh) => s + sh.height, 0) / analysis.count : 0), [analysis]);
   // 글자 한 자씩 순서대로(좌→우) 치수를 확인할 수 있도록 정렬된 목록 — 원래 인덱스(_idx)는 캔버스
   // 선택(selectedIndex)과 그대로 연동된다.
   const orderedGlyphs = useMemo(() => analysis.shapes
@@ -2080,7 +2081,7 @@ function DrawingAnalyzer(props) {
           h("div", { key: "rows", style: { display: "flex", flexDirection: "column" } }, previewItems.map((it, i) => h("div", {
             key: it.id, style: { display: "flex", justifyContent: "space-between", gap: DS.spacing.sm, padding: `${DS.spacing.xs}px ${DS.spacing.md}px`, fontSize: DS.font.size.xs, borderTop: i ? `1px solid ${t.divider}` : "none" },
           }, [
-            h("span", { key: 1, style: { color: t.ink } }, it.name.replace(" (도면 분석 자동생성)", "")),
+            h("span", { key: 1, style: { color: t.ink } }, it.name),
             h("span", { key: 2, style: { color: it.unitPrice > 0 ? t.ink : t.muted, fontFamily: MONO } }, it.unitPrice > 0 ? `${num(it.unitPrice)}원 × ${it.qty}${it.unit}` : "단가 없음"),
           ]))),
         ]),
