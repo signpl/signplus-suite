@@ -217,31 +217,41 @@ function extractShapesFromContent(content, shapesOut, qIdState) {
   }
 }
 
-// 도형들의 qPath(flush 시점에 열려있던 q 스택)를 이용해 "같은 글자"에 속하는 도형끼리 groupKey를
-// 매긴다 — SvgVectorParser의 <g> 기반 판정과 같은 원리로, flush 시점의 가장 안쪽(직계) q 구간을
-// 그 도형의 "글자 그룹"으로 본다. q...cm...(여러 획)...Q로 한 글자씩 묶어 그리는 것이 실제 도면
-// (특히 초성/중성/종성이 개별 도형인 한글 채널 도면)에서 흔한 패턴이라, 좌표 근접도만으로는
-// 구분되지 않는 자소들을 정확히 묶어준다. 다만 그 q 구간이 전체 도면의 70% 이상을 차지하면(=
-// 페이지/레이어 전체를 감싸는 q) 여러 글자를 한꺼번에 묶어버리는 것이므로 신호로 쓰지 않는다.
+// 도형들의 qPath(flush 시점에 열려있던 q 스택 전체, 바깥쪽→안쪽 순서)를 이용해 "같은 글자"에
+// 속하는 도형끼리 groupKey를 매긴다 — SvgVectorParser의 <g> 조상 체인 판정과 같은 원리다.
+// 가장 안쪽(직계) q만 보지 않고, 그 도형에 열려있던 q 스택을 안쪽에서 바깥쪽으로 훑어가며
+// 전체 도면의 70% 미만인 동안 계속 확장해 그중 가장 바깥쪽 q를 "글자 그룹"으로 본다. q...cm...
+// (여러 획)...Q로 한 글자씩 묶어 그리는 것이 실제 도면(특히 초성/중성/종성이 개별 도형인 한글
+// 채널 도면)에서 흔한 패턴이지만, "글자 그룹 > 획 서브그룹"처럼 q가 한 단계 더 중첩되어 있으면
+// 안쪽 q만 봐서는 획 단위로만 쪼개져 정작 글자 단위인 바깥쪽 q를 놓친다 — 그래서 qPath 전체를
+// 훑는다. 어떤 q 구간이 전체 도면의 70% 이상을 차지하면(=페이지/레이어 전체를 감싸는 q) 그
+// 지점에서 확장을 멈춘다 — 여러 글자를 한꺼번에 묶어버리는 것이므로 신호로 쓰지 않는다.
 function assignPdfGroupKeys(shapes) {
   const shapeBoxes = shapes.map(shapeBboxPts);
   let overall = null;
   for (const b of shapeBoxes) overall = unionBboxPts(overall, b);
 
-  const innerQOf = (shape) => (shape.qPath && shape.qPath.length ? shape.qPath[shape.qPath.length - 1] : null);
+  // qPath에 등장하는 모든 q id(안쪽/바깥쪽 구분 없이)에 대해, 그 q가 열려있는 동안 flush된
+  // 모든 도형의 bbox 합집합을 구해둔다 — 이전에는 "가장 안쪽" q만 봤기 때문에, 바깥쪽(글자
+  // 단위) q는 그 q 구간 안에 항상 더 안쪽 q가 열려 있는 한 이 집계에 전혀 등장하지 못했다.
   const qBboxById = new Map();
   shapes.forEach((shape, i) => {
-    const qid = innerQOf(shape);
-    if (qid != null) qBboxById.set(qid, unionBboxPts(qBboxById.get(qid), shapeBoxes[i]));
+    for (const qid of shape.qPath || []) {
+      qBboxById.set(qid, unionBboxPts(qBboxById.get(qid), shapeBoxes[i]));
+    }
   });
+  const isWholePageBbox = (b) => !!overall && overall.width > 0 && overall.height > 0
+    && b.width >= overall.width * 0.7 && b.height >= overall.height * 0.7;
 
   for (let i = 0; i < shapes.length; i++) {
-    const qid = innerQOf(shapes[i]);
-    if (qid != null) {
-      const qBbox = qBboxById.get(qid);
-      const isWholePage = !!overall && overall.width > 0 && overall.height > 0 && qBbox.width >= overall.width * 0.7 && qBbox.height >= overall.height * 0.7;
-      if (!isWholePage) shapes[i].groupKey = "q" + qid;
+    const path = shapes[i].qPath || [];
+    let chosen = null;
+    for (let d = path.length - 1; d >= 0; d--) {
+      const qBbox = qBboxById.get(path[d]);
+      if (!qBbox || isWholePageBbox(qBbox)) break;
+      chosen = path[d];
     }
+    if (chosen != null) shapes[i].groupKey = "q" + chosen;
     delete shapes[i].qPath;
   }
 }

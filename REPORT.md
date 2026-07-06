@@ -128,3 +128,39 @@ v3.7 개발 계획
 - 렌더러(메인): [renderer/app.js](renderer/app.js#L1-L1836)
 - 프리셋: [renderer/jeil-presets.js](renderer/jeil-presets.js)
 - 라이선스 유틸: [license-common.js](license-common.js)
+
+## QuoteEngine 리팩토링 QA (2026-07-06)
+
+- 대상: `services/quoteEngine.js` 분리 이후 최종 QA (커밋 e0ad87e)
+- 랜덤 테스트 100세트(마진율/원가/수량/개별 마진 오버라이드 랜덤 조합) 기준, 리팩토링 이전 원본 공식과 `QuoteEngine`의 `effectiveMargin`/`sellPrice`/`lineTotal`/`baseLineTotal`/`computeTotals`/`genQuoteNo` 결과를 전수 비교 → 전부 일치.
+- `renderer/app.js`의 `QuoteCalculator`는 마진/합계 계산을 전부 `window.QuoteEngine.*` 호출로 위임하며, 자체 계산식은 남아있지 않음.
+- 참고(수정하지 않음): `renderer/app.js`의 `buildQuoteHTML`(라인별 `amt` 계산)과 `main.js`의 Excel export 핸들러는 각각 `unitPrice * qty`를 직접 계산하는 코드가 남아있음. 다만 두 경로 모두 이미 마진이 반영된 판매단가(`exportItems()` 결과)를 입력받아 표시용으로 재계산하는 것이라 `QuoteEngine` 결과와 항상 일치하며, 이번 QA의 수치 비교에서도 불일치는 발견되지 않음.
+- 결론: QuoteEngine 리팩토링 QA PASS
+
+## QuoteEngine 중복 계산 정리 (2026-07-06)
+
+- 대상: `renderer/app.js`의 `buildQuoteHTML()`, `main.js`의 `export-excel` 핸들러
+- 두 위치 모두 `(Number(unitPrice) || 0) * (Number(qty) || 0)` 를 직접 계산하고 있었음 — `QuoteEngine.baseLineTotal()`과 완전히 동일한 공식이라 "중복 계산 로직"으로 오해될 수 있어 각 호출부를 `QuoteEngine.baseLineTotal()` 호출로 교체(렌더러는 `window.QuoteEngine`, main 프로세스는 `require("./services/quoteEngine.js")`).
+- 두 값 모두 이미 마진이 반영된 판매단가(`exportItems()` 결과)를 입력받는 자리라 `baseLineTotal`은 마진을 재적용하지 않고 단순 `unitPrice×qty`만 수행 — 계산 결과·기능은 변경 없음. 해당 지점에 유지 이유를 주석으로 명시.
+- QA: `node -c`로 두 파일 문법 검증 통과, `require("./services/quoteEngine.js")`로 main 프로세스에서의 호출 동작 확인, 앱 실행(정상 기동·크래시 없음) 확인.
+- 결론: 최종 판정 PASS
+
+## AI 자동견적 엔진 분석 (2026-07-06)
+
+- 요청: 도면 분석 결과로 견적 품목을 자동 생성하는 "EstimateEngine" 신규 구현 검토
+- 분석 결과: 요청된 기능은 이미 완전히 구현·배선되어 있음 (v3.12.0~v3.12.2에서 완성).
+  - `renderer/app.js`의 `DrawingAnalyzer` 컴포넌트가 도면(AI/PDF/SVG)을 파싱해 `VectorGeometry.groupIntoGlyphs`/`aggregateShapes`로 글자(Character) 단위 분석을 수행
+  - `LedEngine.recommendProduction()`이 분석 결과로 LED/SMPS/전선/실리콘 제작 기준값을 계산
+  - `VectorQuoteBridge.resolveUnitPrices()`/`buildQuoteItems()`가 단가표(presets)를 조회해 QuoteEngine이 바로 소비할 수 있는 품목 배열(`{id,name,spec,unit,unitPrice,qty,marginOverride}`)로 조립
+  - "견적으로 보내기" 버튼 → `onSendToQuote` → `pendingQuoteItems` → `QuoteCalculator`의 `pendingItems` → 기존 품목 배열에 병합 → `QuoteEngine.*`(오늘 분리한 서비스)가 마진/합계/VAT 계산 → 기존 저장(`sp2-quotes`)·PDF·Excel export 전부 그대로 재사용
+- 결론: 별도의 "EstimateEngine" 서비스를 새로 만들면 `VectorQuoteBridge`/`LedEngine`과 책임이 겹치는 중복 서비스가 되므로 신규 구현하지 않음(제약사항: 중복 계산 함수 생성 금지). 코드 변경 없음.
+
+## AI 도면 분석 — 한글 글자수 과다 인식 버그 수정 (2026-07-06)
+
+- 증상: 실사용 테스트 중 5음절 단어("너를만난곳")가 10글자로 인식됨(정확히 2배) — 채널/조립/LED 개수 등 자동 견적 품목이 실제 필요량의 약 2배로 부풀려지는 실사용 버그.
+- 원인 1: services/pdfVectorParser.js의 assignPdfGroupKeys()와 services/svgVectorParser.js의 characterGroupOf()가 도형의 그룹 판정 시 가장 안쪽(직계) 그룹/큐(q) 레벨만 확인하고 있었음. 도면 구조가 "글자 그룹 > 획(Stroke) 서브그룹"처럼 한 단계 더 중첩되어 있으면, 정작 "글자" 단위인 바깥쪽 그룹은 완전히 무시되고 획 단위로만 인식됨.
+- 원인 2: services/vectorGeometry.js의 mergeDistance()에서 Height Similarity/Baseline Alignment 보너스가 실제 근접도와 무관하게 적용되어, 그룹 신호가 없는 도면에서는 같은 줄의 서로 다른 글자끼리도 병합 점수를 부당하게 받아 적응형 컷이 글자 경계가 아닌 엉뚱한 지점에서 끊길 수 있었음.
+- 수정:
+  - assignPdfGroupKeys()/characterGroupOf(): 직계 레벨만 보지 않고 그룹/큐 조상 체인을 전체 도면의 70% 미만인 동안 계속 타고 올라가 가장 바깥쪽(글자 단위) 그룹을 신호로 사용하도록 변경.
+  - mergeDistance(): Height Similarity/Baseline Alignment 보너스에 실제 근접도(Bounding Box 겹침 또는 중심 거리) 게이팅 추가.
+- QA: 3개 파일 node -c 문법 검증 통과. assignPdfGroupKeys 중첩 q 구조 단위 테스트(중첩된 획이 글자 단위로 올바르게 묶이고 전체 페이지 q는 제외됨) PASS. groupIntoGlyphs 정상 케이스(간격 차이가 뚜렷한 경우) 및 촘촘한 커닝(자소 간격이 글자 간격과 비슷한 경우, 리포트된 버그와 유사) 케이스, 실제 버그와 동일 규모(5음절 자소 2개씩 10조각) 시나리오 모두 정확히 5글자로 인식 - PASS. GUI 재실행 확인은 이번 세션 도구 오류로 완료하지 못함(코드 변경분은 main.js/preload/저장 로직 미변경, services 순수 함수만 수정).

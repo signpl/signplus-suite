@@ -214,8 +214,17 @@
 
     const hole = containment > 0.8 && dominantWindingSign(shapeA) !== dominantWindingSign(shapeB) ? 1 : 0; // Hole 관계/외곽선 포함
 
+    // Height Similarity/Baseline Alignment는 "같은 글자인지"가 아니라 "같은 줄(같은 폰트 크기)인지"에
+    // 더 가까운 신호다 — 한 줄에 나열된 모든 글자가 동일한 높이·베이스라인을 공유하는 것이 정상이라,
+    // 실제로는 가깝지 않은(다른 글자일) 후보 쌍에도 이 보너스가 그대로 붙어버린다. 그래서 이 두
+    // 신호는 실제 근접도(Bounding Box 겹침 또는 중심 거리)가 어느 정도 있을 때만 반영되도록
+    // 게이팅한다 — 같은 줄이라는 이유만으로는 병합 쪽으로 기울지 않는다.
+    const proximityGate = Math.max(containment, centerCloseness);
+
     // 같은 글자일 가능성을 높이는 신호(보너스)가 클수록 간격을 더 크게 나눠 "더 가깝게" 만든다.
-    const bonus = containment * 1.2 + centerCloseness * 0.6 + heightSim * 0.5 + baselineAlign * 0.5 + group * 2.5 + hole * 2.5;
+    const bonus = containment * 1.2 + centerCloseness * 0.6
+      + heightSim * 0.5 * proximityGate + baselineAlign * 0.5 * proximityGate
+      + group * 2.5 + hole * 2.5;
     return gap / (1 + bonus);
   }
 
@@ -292,7 +301,9 @@
     // 진짜 경계(자간)보다 먼저 잘못 끊기지 않는다.
     let firstPositive = 0;
     for (const [d] of mstEdges) { if (d > 0) { firstPositive = d; break; } }
-    const eps = firstPositive > 0 ? firstPositive : 1;
+    // scale(글자 크기) 기준 하한을 둬, 자소 중 아주 살짝 떨어진 조각의 미세 간격(예: 0.5mm)이
+    // 비율 계산을 지배해 컷이 자소 경계에 잘못 걸리는(→ 글자가 반으로 쪼개지는) 것을 막는다.
+    const eps = Math.max(scale * 0.1, firstPositive > 0 ? firstPositive : 1);
     let cutIdx = mstEdges.length - 1, biggestRatio = -1;
     for (let k = 1; k < mstEdges.length; k++) {
       const ratio = (mstEdges[k][0] + eps) / (mstEdges[k - 1][0] + eps);
