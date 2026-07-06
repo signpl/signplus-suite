@@ -7,6 +7,7 @@ const { createSqliteProvider } = require("./providers/sqliteProvider.js");
 const { createKvRepository } = require("./repositories/kvRepository.js");
 const { parsePdfVectors } = require("./services/pdfVectorParser.js");
 const { buildDxf } = require("./services/dxfExport.js");
+const QuoteEngine = require("./services/quoteEngine.js");
 
 // userData 경로(app.getPath("userData"))는 app.getName()에 따라 결정된다. 이름을 명시적으로
 // 고정하지 않으면 실행 방식(개발 중 "electron ."과 패키징된 설치본)에 따라 다른 이름으로 해석될
@@ -242,7 +243,7 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
 
     // 품목 행 — 개수에 따라 최소 행수와 행 높이를 조정해 A4 한 장을 항상 보기 좋게 채움. 선택된 견적
     // 스타일의 여백 밀도(padBoost)를 더해 PDF와 비슷한 느낌으로 맞춘다.
-    const realItems = items.filter((i) => i.name || i.spec || (Number(i.unitPrice) || 0) * (Number(i.qty) || 0));
+    const realItems = items.filter((i) => i.name || i.spec || QuoteEngine.baseLineTotal(i));
     const displayItems = realItems.length ? realItems : items;
     const minRows = displayItems.length <= 2 ? 10 : displayItems.length <= 4 ? 9 : displayItems.length <= 8 ? 7 : 6;
     const rowCount = Math.max(displayItems.length, minRows);
@@ -252,7 +253,9 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     for (let idx = 0; idx < rowCount; idx++) {
       const it = displayItems[idx];
       const rr = r + idx;
-      const amt = it ? (Number(it.unitPrice) || 0) * (Number(it.qty) || 0) : 0;
+      // 표시용 라인 합계 — it.unitPrice는 렌더러에서 이미 마진이 반영되어 전달된 값이라
+      // QuoteEngine.baseLineTotal(단순 unitPrice×qty, 마진 재적용 없음)을 그대로 재사용한다.
+      const amt = it ? QuoteEngine.baseLineTotal(it) : 0;
       const cells = [
         it ? idx + 1 : "",
         it ? it.name : "",

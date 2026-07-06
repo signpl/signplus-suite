@@ -36,6 +36,17 @@
     return (presets || []).filter((p) => p.cat === "채널");
   }
 
+  function resolveChannelSpec(avgSizeMm) {
+    const h = Math.round(Number(avgSizeMm) || 0);
+    if (h >= 250 && h <= 349) return "300각";
+    if (h >= 350 && h <= 449) return "400각";
+    if (h >= 450 && h <= 549) return "500각";
+    if (h >= 550 && h <= 649) return "600각";
+    if (h >= 650 && h <= 749) return "700각";
+    if (h >= 750) return "700각";
+    return "300각";
+  }
+
   // 환경설정 > 단가표(presets)를 유일한 기준으로 삼아 AI 도면 분석 자동생성 품목의 단가를 찾는다.
   // 표에 해당 항목이 없으면 임의의 숫자를 지어내지 않고 0으로 둔다(사용자가 견적 화면에서 직접
   // 입력하거나, 단가표에 항목을 추가하면 다음부터 자동으로 반영된다).
@@ -47,15 +58,12 @@
     const list = presets || [];
     const c = ctx || {};
 
+    const channelSpec = resolveChannelSpec(c.avgSizeMm || 0);
     const channelPreset = (c.channelPresetId ? findPreset(list, (p) => p.id === c.channelPresetId) : null)
+      || findPreset(list, (p) => p.cat === "채널" && (p.spec || "").trim() === channelSpec)
       || nearestBySpecNumber(list, "채널", /^(\d+)\s*각$/, c.avgSizeMm || 0, (p) => (p.sub || "").includes("갈바후광"))
       || nearestBySpecNumber(list, "채널", /^(\d+)\s*각$/, c.avgSizeMm || 0);
-    // "갈바"는 채널 카테고리(가공+원자재 이미 포함) 밖에서는 지주/프레임 등 무관한 품목 이름에도
-    // 흔히 등장해 오검색 위험이 크다 — 신뢰할 수 있는 별도 "원자재" 카테고리가 생기기 전까지는
-    // 0으로 두고 사용자가 직접 입력하게 한다(잘못된 단가를 지어내는 것보다 안전).
-    const galvaPreset = null;
     const generalAssemblyPreset = findPreset(list, (p) => p.cat === "시공/경비" && /조립/.test(p.name || ""));
-    const acrylicPreset = findPreset(list, (p) => /아크릴/.test((p.name || "") + (p.spec || "")));
 
     const wattToken = ((c.ledType || "").match(/[\d.]+W/i) || [])[0];
     const countToken = ((c.ledType || "").match(/\d+구/) || [])[0];
@@ -69,9 +77,7 @@
 
     return {
       channelUnitPrice: channelPreset ? channelPreset.price : 0,
-      galvaUnitPrice: galvaPreset ? galvaPreset.price : 0,
       generalAssemblyUnitPrice: generalAssemblyPreset ? generalAssemblyPreset.price : 0,
-      acrylicUnitPricePerSqM: acrylicPreset ? acrylicPreset.price : 0,
       moduleUnitPrice: modulePreset ? modulePreset.price : 0,
       assemblyUnitPrice: ledAssemblyPreset ? ledAssemblyPreset.price : 0,
       smpsUnitPrice: smpsPreset ? smpsPreset.price : 0,
@@ -81,8 +87,7 @@
   }
 
   // opts: {
-  //   glyphCount, totalAreaSqM, channelAvgSizeMm, channelUnitPrice,
-  //   galvaUnitPrice, acrylicUnitPricePerSqM,
+  //   glyphCount, channelAvgSizeMm, channelUnitPrice,
   //   moduleCount, moduleUnitPrice, ledType, assemblyUnitPrice,
   //   smpsCap, smpsQty, smpsUnitPrice,
   //   wireLengthM, wireUnitPrice, siliconeQty, siliconeUnitPrice,
@@ -93,45 +98,30 @@
     const items = [];
 
     if (o.glyphCount > 0) {
-      items.push({
-        id: genId(),
-        name: "채널 가공비",
-        spec: `평균 ${Math.round(o.channelAvgSizeMm || 0)}각 · ${o.glyphCount}자`,
-        unit: "개",
-        unitPrice: Math.round(o.channelUnitPrice || 0),
-        qty: o.glyphCount,
-        marginOverride: null,
-      });
-      items.push({
-        id: genId(),
-        name: "갈바 원자재비",
-        spec: "채널 가공비에 포함되지 않은 별도 원자재 필요 시 단가 입력",
-        unit: "개",
-        unitPrice: Math.round(o.galvaUnitPrice || 0),
-        qty: o.glyphCount,
-        marginOverride: null,
-      });
-      items.push({
-        id: genId(),
-        name: "조립비",
-        spec: `채널·아크릴·LED 조립 · ${o.glyphCount}자`,
-        unit: "개",
-        unitPrice: Math.round(o.generalAssemblyUnitPrice || 0),
-        qty: o.glyphCount,
-        marginOverride: null,
-      });
-    }
-
-    if (o.totalAreaSqM > 0) {
-      items.push({
-        id: genId(),
-        name: "아크릴 판넬",
-        spec: `총 면적 ${o.totalAreaSqM.toFixed(2)}㎡`,
-        unit: "㎡",
-        unitPrice: Math.round(o.acrylicUnitPricePerSqM || 0),
-        qty: Math.round(o.totalAreaSqM * 100) / 100,
-        marginOverride: null,
-      });
+      const shouldSkip = (name) => /갈바원자재|아크릴판넬/i.test(name || "");
+      if (!shouldSkip("채널 가공비")) {
+        const channelSpec = resolveChannelSpec(o.channelAvgSizeMm || 0);
+        items.push({
+          id: genId(),
+          name: "채널 가공비",
+          spec: `${channelSpec} · ${o.glyphCount}자`,
+          unit: "개",
+          unitPrice: Math.round(o.channelUnitPrice || 0),
+          qty: o.glyphCount,
+          marginOverride: null,
+        });
+      }
+      if (!shouldSkip("조립비")) {
+        items.push({
+          id: genId(),
+          name: "조립비",
+          spec: `채널·LED 조립 · ${o.glyphCount}자`,
+          unit: "개",
+          unitPrice: Math.round(o.generalAssemblyUnitPrice || 0),
+          qty: o.glyphCount,
+          marginOverride: null,
+        });
+      }
     }
 
     if (o.moduleCount > 0) {
@@ -195,5 +185,6 @@
   }
 
   const VectorQuoteBridge = { buildQuoteItems, resolveUnitPrices, listChannelPresets };
+  if (typeof module !== "undefined" && module.exports) module.exports = VectorQuoteBridge;
   if (typeof window !== "undefined") window.VectorQuoteBridge = VectorQuoteBridge;
 })(typeof globalThis !== "undefined" ? globalThis : this);

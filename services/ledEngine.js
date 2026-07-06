@@ -20,12 +20,30 @@
   const LEAD_PER_MODULE_MM = 300; // 모듈 1개당 리드선(연결선) 여유 길이
   const MAIN_RUN_PER_SMPS_MM = 2000; // SMPS 1대당 본선(전원 인입) 여유 길이
 
-  function recommendSmps(moduleCount) {
-    if (moduleCount <= 0) return { cap: 0, qty: 0 };
-    const need = Math.ceil(moduleCount / 0.8); // 정격의 80%까지만 사용(안전율)
+  function resolveChannelSpec(avgHeightMm) {
+    const h = Math.round(Number(avgHeightMm) || 0);
+    if (h >= 250 && h <= 349) return "300각";
+    if (h >= 350 && h <= 449) return "400각";
+    if (h >= 450 && h <= 549) return "500각";
+    if (h >= 550 && h <= 649) return "600각";
+    if (h >= 650 && h <= 749) return "700각";
+    if (h >= 750) return "700각";
+    return "300각";
+  }
+
+  function resolveLedCountPerChannel(avgHeightMm) {
+    const spec = resolveChannelSpec(avgHeightMm);
+    const n = parseInt(spec, 10) || 0;
+    return Math.max(1, Math.round(n / 100));
+  }
+
+  function recommendSmps(moduleCount, totalWatt) {
+    if (moduleCount <= 0 && (totalWatt || 0) <= 0) return { cap: 0, qty: 0 };
+    const load = (Number(totalWatt) > 0 ? Number(totalWatt) : Number(moduleCount)) || 0;
+    const need = Math.ceil(load / 0.7); // LED 총 소모전력 기준으로 SMPS 용량을 추천
     for (const cap of SMPS_LINEUP) if (cap >= need) return { cap, qty: 1 };
     const maxCap = SMPS_LINEUP[SMPS_LINEUP.length - 1];
-    return { cap: maxCap, qty: Math.max(1, Math.ceil(moduleCount / (maxCap * 0.8))) };
+    return { cap: maxCap, qty: Math.max(1, Math.ceil(load / (maxCap * 0.7))) };
   }
 
   function wattageOf(ledType) {
@@ -42,11 +60,14 @@
 
     const rule = SignRules ? SignRules.findRuleForSize(avgHeightMm) : { sizeMm: avgHeightMm, ledDensityPerM: 3, channelDepthMm: 60, ledType: "3구 1W", strokeWidthMm: 12 };
     const wattagePerLed = wattageOf(rule.ledType);
+    const channelSpec = resolveChannelSpec(avgHeightMm);
+    const ledCountPerChannel = resolveLedCountPerChannel(avgHeightMm);
 
-    // LED는 획(채널 테두리)을 따라 일정 간격으로 배치 — 면적이 아니라 외곽길이 기준(제작 실무 방식)
-    const moduleCount = Math.ceil(totalPerimeterM * rule.ledDensityPerM);
+    // LED 개수 = 채널 개수 × 단가표 규격별 LED 개수
+    const channelCount = Math.max(1, glyphCount || 0);
+    const moduleCount = channelCount > 0 ? channelCount * ledCountPerChannel : Math.ceil(totalPerimeterM * rule.ledDensityPerM);
     const totalWatt = Math.round(moduleCount * wattagePerLed * 10) / 10;
-    const smps = recommendSmps(moduleCount);
+    const smps = recommendSmps(moduleCount, totalWatt);
     const wireLengthM = Math.round(((moduleCount * LEAD_PER_MODULE_MM) + (smps.qty * MAIN_RUN_PER_SMPS_MM)) / 100) / 10;
     const siliconeQty = moduleCount; // LED 납땜 포인트 1개당 실리콘 포인팅 1회 기준(Version 1 추정)
 
@@ -56,6 +77,8 @@
       channelDepthMm: rule.channelDepthMm,
       strokeWidthMm: rule.strokeWidthMm,
       ledType: rule.ledType,
+      channelSpec,
+      ledCountPerChannel,
       wattagePerLed,
       moduleCount,
       totalWatt,

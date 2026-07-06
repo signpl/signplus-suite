@@ -243,13 +243,22 @@ function assignPdfGroupKeys(shapes) {
   const isWholePageBbox = (b) => !!overall && overall.width > 0 && overall.height > 0
     && b.width >= overall.width * 0.7 && b.height >= overall.height * 0.7;
 
+  // 가장 안쪽(직계) q만 보지 않고, 그 도형에 열려있던 q 스택을 안쪽에서 바깥쪽으로 계속
+  // 훑어가며 전체 도면의 70% 미만인 동안 확장한다 — "글자 그룹 > 획 서브그룹"처럼 중첩 단계가
+  // 하나가 아니라 여러 단계(단어 > 글자 > 획)일 수도 있어서, 딱 한 단계만 더 보는 것으로는
+  // 부족하다. 다만 무작정 끝까지 올라가면 옆 글자·단어까지 포함하는 그룹을 "글자 그룹"으로
+  // 잘못 채택할 위험이 있으므로, 이전에 채택한 레벨보다 폭/높이가 갑자기 크게(2배 이상)
+  // 넓어지는 지점(=다른 글자로 넘어간 것으로 보이는 지점)에서 멈춘다.
   for (let i = 0; i < shapes.length; i++) {
     const path = shapes[i].qPath || [];
     let chosen = null;
+    let chosenBbox = null;
     for (let d = path.length - 1; d >= 0; d--) {
       const qBbox = qBboxById.get(path[d]);
       if (!qBbox || isWholePageBbox(qBbox)) break;
+      if (chosenBbox && (qBbox.width > chosenBbox.width * 2 || qBbox.height > chosenBbox.height * 2)) break;
       chosen = path[d];
+      chosenBbox = qBbox;
     }
     if (chosen != null) shapes[i].groupKey = "q" + chosen;
     delete shapes[i].qPath;

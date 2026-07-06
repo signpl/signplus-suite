@@ -304,11 +304,21 @@
     // scale(글자 크기) 기준 하한을 둬, 자소 중 아주 살짝 떨어진 조각의 미세 간격(예: 0.5mm)이
     // 비율 계산을 지배해 컷이 자소 경계에 잘못 걸리는(→ 글자가 반으로 쪼개지는) 것을 막는다.
     const eps = Math.max(scale * 0.1, firstPositive > 0 ? firstPositive : 1);
-    let cutIdx = mstEdges.length - 1, biggestRatio = -1;
+    // 도면에 글자 사이 간격 말고도 "단어 사이 간격"처럼 한 단계 더 큰 간격이 섞여 있을 수 있다
+    // (예: "너를 만난곳"처럼 띄어쓰기가 있는 문구). 이때 전체 구간에서 "가장 큰" 도약 하나만
+    // 고르면 그 도약이 글자 경계가 아니라 단어 경계에 걸려버려서, 더 작은(하지만 여전히 뚜렷한)
+    // 글자 경계 도약들이 전부 그 밑에 묻혀 서로 다른 글자끼리 통째로 합쳐진다. 그래서 거리가
+    // 작은 쪽부터 순서대로 훑다가 "뚜렷한 도약"(RATIO_SIGNIFICANT배 이상)을 처음 만나는 지점을
+    // 컷으로 쓴다 — 여러 단계의 간격 중 가장 안쪽(글자 단위) 경계를 우선한다. 그런 도약이 전혀
+    // 없으면(간격이 아주 매끄럽게 늘어나는 경우) 기존처럼 가장 큰 도약으로 대체한다.
+    const RATIO_SIGNIFICANT = 1.5;
+    let cutIdx = mstEdges.length - 1, biggestRatio = -1, biggestIdx = mstEdges.length - 1, firstSignificantIdx = -1;
     for (let k = 1; k < mstEdges.length; k++) {
       const ratio = (mstEdges[k][0] + eps) / (mstEdges[k - 1][0] + eps);
-      if (ratio > biggestRatio) { biggestRatio = ratio; cutIdx = k - 1; }
+      if (ratio > biggestRatio) { biggestRatio = ratio; biggestIdx = k - 1; }
+      if (firstSignificantIdx === -1 && ratio >= RATIO_SIGNIFICANT) firstSignificantIdx = k - 1;
     }
+    cutIdx = firstSignificantIdx !== -1 ? firstSignificantIdx : biggestIdx;
     for (let k = 0; k <= cutIdx; k++) union(mstEdges[k][1], mstEdges[k][2]);
     return { acceptedEdges: mstEdges.slice(0, cutIdx + 1), rejectedEdges: mstEdges.slice(cutIdx + 1), cutThreshold: mstEdges[cutIdx][0] };
   }

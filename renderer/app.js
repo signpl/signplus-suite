@@ -303,7 +303,7 @@ function buildQuoteHTML(data) {
   const tableHeadColor = table.headerColor || colors.ink;
 
   // 품목이 적으면 빈 행으로 채워 정형 유지(단일 페이지). 많으면 페이지를 나눠 잘리지 않게 한다.
-  const realItems = items.filter((i) => i.name || i.spec || (Number(i.unitPrice) || 0) * (Number(i.qty) || 0));
+  const realItems = items.filter((i) => i.name || i.spec || window.QuoteEngine.baseLineTotal(i));
   const displayItems = realItems.length ? realItems : items;
   const MIN_ROWS = 6;          // 최소 표시 행(빈 행 포함, 단일 페이지에서만 적용)
 
@@ -344,7 +344,9 @@ function buildQuoteHTML(data) {
   const lastPageIdx = itemPages.length - 1;
 
   const rowHtml = (i, no) => {
-    const amt = (Number(i.unitPrice) || 0) * (Number(i.qty) || 0);
+    // 표시용 라인 합계 — 여기 i.unitPrice는 이미 마진이 반영된 판매단가(exportItems())이므로
+    // QuoteEngine.baseLineTotal(단순 unitPrice×qty, 마진 재적용 없음)을 그대로 재사용한다.
+    const amt = window.QuoteEngine.baseLineTotal(i);
     return `<tr>
       <td class="c num">${no}</td>
       <td class="l">${esc(i.name)}</td>
@@ -1682,8 +1684,11 @@ function DrawingAnalyzer(props) {
   // "실제 Object(글자)" 단위로 집계한다(services/vectorGeometry.js의 groupIntoGlyphs).
   const glyphShapes = useMemo(() => window.VectorGeometry.groupIntoGlyphs(scaledShapes), [scaledShapes]);
   const analysis = useMemo(() => window.VectorGeometry.aggregateShapes(glyphShapes), [glyphShapes]);
-  // 평균 글자 높이 — Character.height(글자 하나의 실제 세로 치수) 기준. Path/Segment는 쓰지 않는다.
-  const avgSizeMm = useMemo(() => (analysis.count ? analysis.shapes.reduce((s, sh) => s + sh.height, 0) / analysis.count : 0), [analysis]);
+  // 기준 글자 높이(각수) — Character.height(글자 하나의 실제 세로 치수) 기준. 평균이 아니라
+  // 최댓값을 쓴다: 받침 유무 등으로 글자마다 높이가 들쭉날쭉해도, 실제 채널 제작에서는 그 줄에서
+  // 가장 큰 글자에 맞춰 채널 깊이·LED 종류를 통일해서 잡기 때문이다(평균을 쓰면 실제 필요한
+  // 각수보다 작게 잡혀 채널 깊이가 부족해질 수 있다). Path/Segment는 쓰지 않는다.
+  const avgSizeMm = useMemo(() => (analysis.count ? Math.round(Math.max(...analysis.shapes.map((sh) => sh.height))) : 0), [analysis]);
   // 글자 한 자씩 순서대로(좌→우) 치수를 확인할 수 있도록 정렬된 목록 — 원래 인덱스(_idx)는 캔버스
   // 선택(selectedIndex)과 그대로 연동된다.
   const orderedGlyphs = useMemo(() => analysis.shapes
@@ -1708,12 +1713,9 @@ function DrawingAnalyzer(props) {
   }), [props.presets, avgSizeMm, production, selectedChannelId]);
   const previewItems = useMemo(() => window.VectorQuoteBridge.buildQuoteItems({
     glyphCount: analysis.count,
-    totalAreaSqM: analysis.totalArea / 1e6,
     channelAvgSizeMm: avgSizeMm,
     channelUnitPrice: unitPrices.channelUnitPrice,
-    galvaUnitPrice: unitPrices.galvaUnitPrice,
     generalAssemblyUnitPrice: unitPrices.generalAssemblyUnitPrice,
-    acrylicUnitPricePerSqM: unitPrices.acrylicUnitPricePerSqM,
     moduleCount: production.moduleCount,
     moduleUnitPrice: unitPrices.moduleUnitPrice,
     ledType: production.ledType,
@@ -2018,7 +2020,7 @@ function DrawingAnalyzer(props) {
           h("span", { key: "l", style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.semibold } }, "제품 선택"),
           Sel(t, {
             key: "s", value: selectedChannelId, onChange: (e) => setSelectedChannelId(e.target.value),
-          }, [{ value: "", label: `자동 추천 (평균 ${Math.round(avgSizeMm)}각에 가장 가까운 상품)` }]
+          }, [{ value: "", label: `자동 추천 (${Math.round(avgSizeMm)}각에 가장 가까운 상품)` }]
             .concat(channelOptions.map((p) => ({ value: p.id, label: `${p.name}${p.sub ? " · " + p.sub : ""} ${p.spec || ""} (${num(p.price)}원)` })))),
         ]),
         Stat("도면 축척", scaleLabel, ""),
@@ -2027,7 +2029,7 @@ function DrawingAnalyzer(props) {
         // 기대와 다를 때 "병합이 전혀 안 된 것"인지 "병합은 되지만 부족한 것"인지 바로 구분한다.
         scaledShapes.length !== analysis.count && Stat("원본 조각수 (병합 전)", num(scaledShapes.length), "개"),
         Stat("글자수", num(analysis.count), "개"),
-        Stat("평균 글자 높이", num(Math.round(avgSizeMm)), "각(mm)", true),
+        Stat("기준 글자 높이", num(Math.round(avgSizeMm)), "각(mm)", true),
         Stat("평균 획폭", analysis.avgStrokeWidth.toFixed(1), "mm"),
         Stat("총 절곡길이", (analysis.totalPerimeter / 1000).toFixed(2), "m"),
         Stat("총 면적", (analysis.totalArea / 1e6).toFixed(3), "㎡"),

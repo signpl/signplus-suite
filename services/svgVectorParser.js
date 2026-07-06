@@ -120,24 +120,28 @@
     try { return el.getBBox(); } catch (e) { return null; }
   }
 
-  // 글자(문자) 하나에 해당하는 <g> 조상을 찾는다 — 바로 위(직계) <g>만 보지 않고, 그 위로
-  // 이어지는 <g> 조상 체인을 전체 도면의 70% 미만인 동안 계속 타고 올라가 그중 가장 바깥쪽
-  // <g>를 그 도형의 "글자 그룹"으로 본다. 이렇게 하는 이유는, 도면 구조가 "글자 그룹 > 획(Stroke)
-  // 서브그룹"처럼 한 단계 더 중첩되어 있으면 직계 부모만 봐서는 서브그룹(획 단위)만 잡히고 정작
-  // "글자" 단위인 바깥쪽 그룹은 완전히 놓치기 때문이다(초성/중성/종성이 각각 별도 서브그룹으로
-  // 내보내지는 도면에서 실제로 발생). <g>가 전체 도면의 70% 이상을 차지하면(=레이어/아트보드
-  // 전체를 감싸는 그룹) 그 지점에서 올라가기를 멈춘다 — 여러 글자를 한꺼번에 묶어버리는 것이므로
-  // 신호로 쓰지 않는다.
+  // 글자(문자) 하나에 해당하는 <g> 조상을 찾는다 — 직계 부모만 보지 않고 그 조부모(한 단계
+  // 더 바깥쪽)까지만 확인한다. "글자 그룹 > 획(Stroke) 서브그룹"처럼 한 단계 더 중첩된 구조에서
+  // 직계 부모만 보면 서브그룹(획 단위)만 잡히고 정작 "글자" 단위인 바깥쪽 그룹을 놓치기
+  // 때문이다(초성/중성/종성이 각각 별도 서브그룹으로 내보내지는 도면에서 실제로 발생). 다만
+  // 그 이상(단어/줄 단위)까지는 올라가지 않는다 — 서로 다른 글자를 하나로 묶어버릴 위험이
+  // 커지기 때문이다. <g>가 전체 도면의 70% 이상을 차지하면(=레이어/아트보드 전체를 감싸는
+  // 그룹) 신호로 쓰지 않는다.
   function characterGroupOf(el, overallBBox) {
     let node = el.parentNode;
     let best = null;
+    let bestBBox = null;
     while (node && node.tagName && node.tagName.toLowerCase() === "g") {
       const gBBox = safeBBox(node);
       if (!gBBox) break;
       const isWhole = overallBBox && overallBBox.width > 0 && overallBBox.height > 0
         && gBBox.width >= overallBBox.width * 0.7 && gBBox.height >= overallBBox.height * 0.7;
       if (isWhole) break; // 레이어/아트보드 전체를 감싸는 그룹으로 보임 — 여기서 멈춤
+      // 이전에 채택한 레벨보다 폭/높이가 갑자기 크게(2배 이상) 넓어지면, 이 레벨부터는
+      // "다른 글자"까지 포함하는 상위(단어/줄) 그룹으로 넘어간 것으로 보고 여기서 멈춘다.
+      if (bestBBox && (gBBox.width > bestBBox.width * 2 || gBBox.height > bestBBox.height * 2)) break;
       best = node; // 지금까지 확인한 것 중 "전체를 덮지 않는" 가장 바깥쪽 그룹
+      bestBBox = gBBox;
       node = node.parentNode;
     }
     return best;
