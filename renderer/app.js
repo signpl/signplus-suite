@@ -746,14 +746,8 @@ function QuoteCalculator(props) {
   const [linkedProjectId, setLinkedProjectId] = useState(""); // 연결 프로젝트(quote.projectId)
   const [projectsForLink, setProjectsForLink] = useState([]);
 
-  // 견적번호 자동 생성: SP-YYYY-NNNN (연도별 순번)
-  const genQuoteNo = (existing) => {
-    const year = new Date().getFullYear();
-    const prefix = `SP-${year}-`;
-    const nums = (existing || []).map((r) => r.quoteNo).filter((q) => q && q.startsWith(prefix)).map((q) => parseInt(q.slice(prefix.length), 10) || 0);
-    const next = (nums.length ? Math.max(...nums) : 0) + 1;
-    return prefix + String(next).padStart(4, "0");
-  };
+  // 견적번호 자동 생성: SP-YYYY-NNNN (연도별 순번) — services/quoteEngine.js
+  const genQuoteNo = window.QuoteEngine.genQuoteNo;
 
   useEffect(() => {
     loadKey("sp2-quotes", []).then((v) => { setSaved(v); setLoaded(true); setQuoteNo(genQuoteNo(v)); });
@@ -793,16 +787,12 @@ function QuoteCalculator(props) {
   const removeItem = (id) => setItems((p) => p.filter((i) => i.id !== id));
   const updateItem = (id, f, v) => setItems((p) => p.map((i) => (i.id === id ? { ...i, [f]: v } : i)));
 
-  // 원가(입력값) 기준으로 마진율을 적용한 판매단가 계산 — 개별 마진율(marginOverride)이 설정된 품목은 전체 마진율 대신 그 값을 사용
-  const effectiveMargin = (i) => (i.marginOverride === null || i.marginOverride === undefined || i.marginOverride === "" ? (Number(marginRate) || 0) : (Number(i.marginOverride) || 0));
-  const sellPrice = (i) => Math.round((Number(i.unitPrice) || 0) * (1 + effectiveMargin(i) / 100));
-  const lineTotal = (i) => sellPrice(i) * (Number(i.qty) || 0);
-  const baseLineTotal = (i) => (Number(i.unitPrice) || 0) * (Number(i.qty) || 0);
-  const subtotal = items.reduce((s, i) => s + lineTotal(i), 0);
-  const vat = Math.round(subtotal * 0.1);
-  const total = subtotal + vat;
-  const baseSubtotal = items.reduce((s, i) => s + baseLineTotal(i), 0);
-  const marginAmount = subtotal - baseSubtotal;
+  // 원가(입력값) 기준으로 마진율을 적용한 판매단가/합계 계산 — services/quoteEngine.js (QuoteCalculator에서 분리)
+  const effectiveMargin = (i) => window.QuoteEngine.effectiveMargin(i, marginRate);
+  const sellPrice = (i) => window.QuoteEngine.sellPrice(i, marginRate);
+  const lineTotal = (i) => window.QuoteEngine.lineTotal(i, marginRate);
+  const baseLineTotal = (i) => window.QuoteEngine.baseLineTotal(i);
+  const { subtotal, vat, total, baseSubtotal, marginAmount } = window.QuoteEngine.computeTotals(items, marginRate);
 
   const pickLogo = async () => { const d = await window.api.pickImage(); if (d) { await props.onSaveCompany({ ...company, logo: d }); flash("로고 저장됨"); } };
   const pickStamp = async () => { const d = await window.api.pickImage(); if (d) { await props.onSaveCompany({ ...company, stamp: d }); flash("도장 저장됨"); } };
