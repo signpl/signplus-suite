@@ -3210,6 +3210,9 @@ function App() {
   const sendDrawingItemsToQuote = (items) => { setPendingQuoteItems(items); setTab("quote"); };
   const openSettings = (sectionId) => { setSettingsSection(sectionId); setTab("settings"); };
 
+  const openCommunity = async () => {
+    if (window.api && window.api.openCommunity) await window.api.openCommunity();
+  };
   const checkLicense = async () => {
     if (window.license && window.license.status) {
       const st = await window.license.status();
@@ -3363,6 +3366,31 @@ function App() {
       h("div", { key: 4, style: { display: "flex", gap: DS.spacing.sm } }, [
         h("button", { key: 1, onClick: handleBackupExport, title: "지금까지 저장된 견적·시안의뢰서·거래처·단가 전부를 파일 하나로 내보냅니다.", style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: DS.spacing.sm, padding: `${DS.spacing.md}px ${DS.spacing.sm}px`, borderRadius: DS.radius.md, border: `1px solid ${t.divider}`, cursor: "pointer", background: t.surface2, color: t.muted, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, fontFamily: FONT } }, [Ico.download({ size: 13 }), "백업"]),
         h("button", { key: 2, onClick: handleBackupImport, title: "백업 파일을 불러와 데이터를 복원합니다. (재설치·새 컴퓨터 이전 시 사용)", style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: DS.spacing.sm, padding: `${DS.spacing.md}px ${DS.spacing.sm}px`, borderRadius: DS.radius.md, border: `1px solid ${t.divider}`, cursor: "pointer", background: t.surface2, color: t.muted, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, fontFamily: FONT } }, [Ico.book({ size: 13 }), "복원"]),
+      ]),
+      h("button", {
+        key: "community",
+        onClick: openCommunity,
+        title: "대한민국 간판인들의 정보공유 플랫폼",
+        style: {
+          display: "flex",
+          alignItems: "flex-start",
+          gap: DS.spacing.sm,
+          padding: `${DS.spacing.md}px ${DS.spacing.md}px`,
+          borderRadius: DS.radius.md,
+          border: `1px solid ${t.divider}`,
+          cursor: "pointer",
+          background: t.surface2,
+          color: t.ink,
+          fontFamily: FONT,
+          textAlign: "left",
+          marginTop: DS.spacing.sm,
+        },
+      }, [
+        h("span", { key: 1, style: { display: "inline-flex", marginTop: 2, color: t.accent } }, Ico.book({ size: 15 })),
+        h("span", { key: 2, style: { display: "flex", flexDirection: "column", gap: 2, flex: 1 } }, [
+          h("span", { key: "title", style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.ink } }, "간판인 광장 by Signplus"),
+          h("span", { key: "desc", style: { fontSize: DS.font.size.xs, color: t.muted, lineHeight: 1.45 } }, "대한민국 간판인들의 정보공유 플랫폼"),
+        ]),
       ]),
       backupMsg && h("div", { key: 5, style: { fontSize: DS.font.size.xs, color: backupMsg.includes("실패") ? t.red : t.green, marginTop: DS.spacing.sm, textAlign: "center", fontWeight: DS.font.weight.semibold } }, backupMsg),
       license && license.activated && licenseTier(license) === "trial" && typeof license.daysLeft === "number" && h("div", { key: 6, style: { marginTop: DS.spacing.md, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, background: license.daysLeft <= 7 ? t.red + "18" : t.surface2, border: `1px solid ${license.daysLeft <= 7 ? t.red + "44" : t.divider}`, textAlign: "center" } }, [

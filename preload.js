@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld("api", {
   pickDrawingFile: () => ipcRenderer.invoke("drawing-pick-file"),
   readDrawingPath: (filePath) => ipcRenderer.invoke("drawing-read-path", filePath),
   exportDrawingDxf: (shapes, heightMM, filename) => ipcRenderer.invoke("drawing-export-dxf", shapes, heightMM, filename),
+  openCommunity: () => ipcRenderer.invoke("open-signplus-community"),
   getPathForFile: (file) => webUtils.getPathForFile(file),
 });
 

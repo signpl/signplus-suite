@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const ExcelJS = require("exceljs");
@@ -61,6 +61,11 @@ ipcMain.handle("get-storage-dir", async () => {
   } catch {
     return null;
   }
+});
+
+ipcMain.handle("open-signplus-community", async () => {
+  await shell.openExternal("https://infopool.signplus.myds.me/");
+  return { ok: true };
 });
 
 /* ------------------------------------------------------------------ */
