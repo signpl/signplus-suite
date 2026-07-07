@@ -107,17 +107,15 @@ function checkSerial(serial) {
     const body = "SPXA" + admin[1] + admin[2] + admin[3];
     if (checksum(body) !== admin[4]) return { valid: false };
     return { valid: true, type: "admin", expired: false, daysLeft: Infinity };
-  }
-
-  const beta = clean.match(/^SPS-BETA-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})$/);
-  if (beta) {
+  } else if (clean.startsWith("SPS-BETA-")) {
+    const beta = clean.match(/^SPS-BETA-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})$/);
+    if (!beta) return { valid: false };
     const body = "SPSBETA" + beta[1] + beta[2];
     if (checksum(body) !== beta[3]) return { valid: false };
     return { valid: true, type: "beta" };
-  }
-
-  const cust = clean.match(/^SPX-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})$/);
-  if (cust) {
+  } else if (clean.startsWith("SPX-")) {
+    const cust = clean.match(/^SPX-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})$/);
+    if (!cust) return { valid: false };
     const body = "SPX" + cust[1] + cust[2] + cust[3];
     if (checksum(body) !== cust[4]) return { valid: false };
     const issuedAt = decodeDate(cust[1]);
@@ -137,4 +135,3 @@ function isValidSerial(serial) {
 }
 
 module.exports = { generateSerial, generateAdminSerial, generateBetaSerial, checkSerial, isValidSerial, LICENSE_SECRET, VALID_DAYS, BETA_VALID_DAYS };
-

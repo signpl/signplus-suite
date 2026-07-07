@@ -7,12 +7,10 @@ contextBridge.exposeInMainWorld("storage", {
   },
   set: async (key, value) => {
     const res = await ipcRenderer.invoke("storage-set", key, value);
-    try {
-      if (typeof window !== "undefined" && window && window.dispatchEvent) {
-        window.dispatchEvent(new CustomEvent("sp-storage-changed", { detail: { key } }));
-      }
-    } catch (e) {
-      // ignore
+    // 렌더러 컨텍스트에서 실행되므로 window 객체는 항상 존재한다고 가정할 수 있으나,
+    // 만약을 위해 확인 후 이벤트를 발생시킵니다.
+    if (typeof window !== "undefined" && window.dispatchEvent) {
+      window.dispatchEvent(new CustomEvent("sp-storage-changed", { detail: { key } }));
     }
     return { key, value };
   },

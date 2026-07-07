@@ -231,6 +231,8 @@ function Card(t, props, children) {
 }
 // 페이지 헤더 — KPI 카드와 동일한 액센트 바 + 글로우 모티프로 통일 (시그니처/호출부 동일)
 function SectionTitle(t, title, sub, right) {
+  const communityTopTitles = new Set(["견적 계산기", "시안 제작 의뢰서", "LED 계산기", "AI 도면 분석"]);
+  if (communityTopTitles.has(title)) return null;
   return h("div", {
     style: {
       position: "relative",
@@ -254,6 +256,154 @@ function SectionTitle(t, title, sub, right) {
       sub && h("div", { key: "b", style: { fontSize: DS.font.size.base, color: t.muted, marginTop: DS.spacing.xs } }, sub),
     ]),
     right && h("div", { key: 2, style: { position: "relative" } }, right),
+  ]);
+}
+function PageHeaderCard(t, title, sub, right) {
+  return h("div", {
+    style: {
+      position: "relative",
+      overflow: "hidden",
+      marginBottom: DS.spacing.xl,
+      background: t.surface,
+      border: `1px solid ${t.divider}`,
+      borderRadius: DS.radius.lg,
+      padding: DS.spacing.xxl,
+      boxShadow: DS.shadow.sm,
+      display: "flex",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: DS.spacing.lg,
+    },
+  }, [
+    h("div", { key: "bar", style: { position: "absolute", top: 0, left: 0, right: 0, height: 3, background: t.accent } }),
+    h("div", { key: "glow", style: { position: "absolute", right: -18, bottom: -18, width: 72, height: 72, borderRadius: DS.radius.pill, background: `${t.accent}14` } }),
+    h("div", { key: 1, style: { position: "relative" } }, [
+      h("div", { key: "a", style: { fontSize: DS.font.size.xxl, fontWeight: DS.font.weight.bold, color: t.ink, letterSpacing: -0.3 } }, title),
+      sub && h("div", { key: "b", style: { fontSize: DS.font.size.base, color: t.muted, marginTop: DS.spacing.xs } }, sub),
+    ]),
+    right && h("div", { key: 2, style: { position: "relative" } }, right),
+  ]);
+}
+function CommunityPremiumSection(props) {
+  const t = props.theme;
+  const openCommunity = props.openCommunity;
+  if (!openCommunity) return null;
+  return Card(t, { style: { padding: DS.spacing.md } }, [
+    h("div", {
+      key: "community-main",
+      style: {
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr)",
+        gap: DS.spacing.md,
+        alignItems: "stretch",
+      },
+    }, [
+      h("button", {
+        key: "community-brand",
+        onClick: openCommunity,
+        style: {
+          border: "none",
+          borderRadius: DS.radius.lg,
+          background: `linear-gradient(135deg, ${t.accentSoft} 0%, ${t.surface2} 58%, ${t.bg} 100%)`,
+          padding: `${DS.spacing.xl}px ${DS.spacing.xl}px`,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          gap: 6,
+          textAlign: "left",
+          cursor: "pointer",
+          minHeight: 116,
+          boxShadow: DS.shadow.sm,
+        },
+      }, [
+        h("div", { key: "title", style: { fontSize: DS.font.size.xxl, fontWeight: DS.font.weight.heavy, color: t.ink, letterSpacing: -0.4 } }, "간판인 광장"),
+        h("div", { key: "by", style: { fontSize: DS.font.size.md, fontWeight: DS.font.weight.bold, color: t.accent } }, "by Signplus"),
+        h("div", { key: "desc", style: { marginTop: 2, fontSize: DS.font.size.sm, color: t.muted, lineHeight: 1.55 } }, "대한민국 간판인들의 정보공유 플랫폼"),
+      ]),
+      h("button", {
+        key: "community-vendor",
+        onClick: openCommunity,
+        style: {
+          border: `1px solid ${t.divider}`,
+          borderRadius: DS.radius.lg,
+          background: t.surface,
+          padding: `${DS.spacing.lg}px ${DS.spacing.lg}px`,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          gap: DS.spacing.sm,
+          textAlign: "left",
+          cursor: "pointer",
+          minHeight: 116,
+          boxShadow: DS.shadow.sm,
+        },
+      }, [
+        h("div", { key: "copy", style: { display: "flex", flexDirection: "column", gap: 6 } }, [
+          h("div", { key: "title", style: { fontSize: DS.font.size.lg, fontWeight: DS.font.weight.heavy, color: t.ink, letterSpacing: -0.2 } }, "이번 주 추천업체"),
+          h("div", { key: "desc", style: { fontSize: DS.font.size.sm, color: t.muted, lineHeight: 1.55, opacity: 0.92 } }, "공식 추천 파트너 · 이번 주 특가를 확인해보세요."),
+        ]),
+        h("div", {
+          key: "cta",
+          style: {
+            alignSelf: "flex-start",
+            minWidth: 74,
+            padding: `7px 12px`,
+            borderRadius: DS.radius.md,
+            border: `1px solid ${t.divider}`,
+            background: t.surface2,
+            fontSize: DS.font.size.xs,
+            fontWeight: DS.font.weight.bold,
+            color: t.accent,
+            textAlign: "center",
+          },
+        }, "자세히 보기"),
+      ]),
+      h("button", {
+        key: "community-groupbuy",
+        onClick: openCommunity,
+        style: {
+          border: `1px solid ${t.divider}`,
+          borderRadius: DS.radius.lg,
+          background: t.surface,
+          padding: `${DS.spacing.lg}px ${DS.spacing.lg}px`,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          gap: DS.spacing.sm,
+          textAlign: "left",
+          cursor: "pointer",
+          minHeight: 116,
+          boxShadow: DS.shadow.sm,
+        },
+      }, [
+        h("div", { key: "copy", style: { display: "flex", flexDirection: "column", gap: 6 } }, [
+          h("div", { key: "title", style: { fontSize: DS.font.size.lg, fontWeight: DS.font.weight.heavy, color: t.ink, letterSpacing: -0.2 } }, "공동구매"),
+          h("div", { key: "desc", style: { fontSize: DS.font.size.sm, color: t.muted, lineHeight: 1.55, opacity: 0.92 } }, "LED, SMPS, 아크릴 공동구매 소식을 확인해보세요."),
+        ]),
+        h("div", {
+          key: "cta",
+          style: {
+            alignSelf: "flex-start",
+            minWidth: 74,
+            padding: `7px 12px`,
+            borderRadius: DS.radius.md,
+            border: `1px solid ${t.divider}`,
+            background: t.surface2,
+            fontSize: DS.font.size.xs,
+            fontWeight: DS.font.weight.bold,
+            color: t.accent,
+            textAlign: "center",
+          },
+        }, "바로가기"),
+      ]),
+    ]),
+  ]);
+}
+function CommunityHeaderBlock(props) {
+  const t = props.theme;
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
+    h(CommunityPremiumSection, { key: "community", theme: t, openCommunity: props.openCommunity }),
+    PageHeaderCard(t, props.title, props.sub, props.right),
   ]);
 }
 function Field(t, label, control) {
@@ -744,8 +894,6 @@ function QuoteCalculator(props) {
   const [editingId, setEditingId] = useState(null);
   const [selectedVendor, setSelectedVendor] = useState("jeil"); // 거래처 ID
   const [vendorPresets, setVendorPresets] = useState([]); // 현재 선택 거래처 단가
-  const [linkedProjectId, setLinkedProjectId] = useState(""); // 연결 프로젝트(quote.projectId)
-  const [projectsForLink, setProjectsForLink] = useState([]);
 
   // 견적번호 자동 생성: SP-YYYY-NNNN (연도별 순번) — services/quoteEngine.js
   const genQuoteNo = window.QuoteEngine.genQuoteNo;
@@ -753,12 +901,6 @@ function QuoteCalculator(props) {
   useEffect(() => {
     loadKey("sp2-quotes", []).then((v) => { setSaved(v); setLoaded(true); setQuoteNo(genQuoteNo(v)); });
     loadKey("sp2-pdf-theme", FONT_MOODS[0]).then((v) => setQuoteStyle(migrateQuoteStyle(v)));
-    loadKey("sp2-projects", []).then(setProjectsForLink);
-    const onProjectsChanged = (e) => {
-      if (e && e.detail && e.detail.key === "sp2-projects") loadKey("sp2-projects", []).then(setProjectsForLink);
-    };
-    window.addEventListener("sp-storage-changed", onProjectsChanged);
-    return () => window.removeEventListener("sp-storage-changed", onProjectsChanged);
   }, []);
   useEffect(() => { setVendorPresets(presets); }, [presets]); // 기본 거래처 단가 동기화
   // 설정(프로그램설정 > 기본 거래처)에서 "jeil"이 아닌 다른 거래처를 기본으로 지정했으면 그 거래처로
@@ -801,7 +943,7 @@ function QuoteCalculator(props) {
   const clearStamp = async () => { await props.onSaveCompany({ ...company, stamp: "" }); };
 
   const handleSave = async () => {
-    const rec = { id: editingId || uid(), quoteNo, client, projectName, quoteDate, validity, note, items, marginRate, subtotal, vat, total, baseSubtotal, marginAmount, status: quoteStatus, vendorId: selectedVendor, projectId: linkedProjectId || null, savedAt: new Date().toISOString() };
+    const rec = { id: editingId || uid(), quoteNo, client, projectName, quoteDate, validity, note, items, marginRate, subtotal, vat, total, baseSubtotal, marginAmount, status: quoteStatus, vendorId: selectedVendor, projectId: null, savedAt: new Date().toISOString() };
     const next = editingId ? saved.map((r) => (r.id === editingId ? rec : r)) : [rec, ...saved].slice(0, 200);
     await saveKey("sp2-quotes", next); setSaved(next); flash("견적 저장 완료");
     if (!editingId) { setEditingId(rec.id); setQuoteNo(genQuoteNo(next)); }
@@ -811,7 +953,7 @@ function QuoteCalculator(props) {
     setClient(r.client || { name: r.clientName || "", manager: "", tel: "" });
     setProjectName(r.projectName); setQuoteNo(r.quoteNo || genQuoteNo(saved)); setQuoteDate(r.quoteDate || todayISO());
     setValidity(r.validity || ""); setNote(r.note || ""); setItems(r.items); setMarginRate(Number(r.marginRate) || 0);
-    setQuoteStatus(normalizeStatus(r.status)); setSelectedVendor(r.vendorId || "jeil"); setLinkedProjectId(r.projectId || ""); setEditingId(r.id); flash("불러왔습니다");
+    setQuoteStatus(normalizeStatus(r.status)); setSelectedVendor(r.vendorId || "jeil"); setEditingId(r.id); flash("불러왔습니다");
   };
   const handleDelete = async (id) => { const next = saved.filter((r) => r.id !== id); await saveKey("sp2-quotes", next); setSaved(next); if (editingId === id) setEditingId(null); };
 
@@ -863,14 +1005,24 @@ function QuoteCalculator(props) {
 
   const th = (label, w, align) => h("th", { key: label, style: { padding: `${DS.spacing.sm}px ${DS.spacing.md}px`, width: w, textAlign: align || "left", background: qHeadBg, color: qHeadText, fontFamily: qFont, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, textTransform: "uppercase", letterSpacing: 0.4 } }, label);
 
-  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
+  return h("div", { style: { width: "100%", maxWidth: 1680, margin: "0 auto", display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
+    h(CommunityHeaderBlock, {
+      key: "community-top",
+      theme: t,
+      openCommunity,
+      title: "견적 계산기",
+      sub: "수신처·품목을 입력하면 정식 견적서 PDF(로고·도장 포함)로 출력됩니다.",
+      right: h("div", { style: { display: "flex", gap: DS.spacing.md } }, [
+        Btn(t, { key: 1, variant: "ghost", onClick: () => setPresetOpen((o) => !o) }, [Ico.book({ size: 14 }), " 단가 불러오기"]),
+      ]),
+    }),
     SectionTitle(t, "견적 계산기", "수신처·품목을 입력하면 정식 견적서 PDF(로고·도장 포함)로 출력됩니다.",
       h("div", { style: { display: "flex", gap: DS.spacing.md } }, [
         Btn(t, { key: 1, variant: "ghost", onClick: () => setPresetOpen((o) => !o) }, [Ico.book({ size: 14 }), " 단가 불러오기"]),
       ])
     ),
     // 프리셋 패널 — 제일에코 단가표에서 골라 담기 (카테고리 → 중분류 아코디언)
-    Card(t, { style: { padding: DS.spacing.md } }, [
+    false && Card(t, { style: { padding: DS.spacing.md } }, [
       h("div", {
         key: "community-main",
         style: {
@@ -1068,7 +1220,6 @@ function QuoteCalculator(props) {
             Field(t, "견적일자", TextInput(t, { type: "date", value: quoteDate, onChange: (e) => setQuoteDate(e.target.value) })),
             Field(t, "유효기간", TextInput(t, { value: validity, onChange: (e) => setValidity(e.target.value) })),
             Field(t, "상태", Sel(t, { value: quoteStatus, onChange: (e) => setQuoteStatus(e.target.value), style: { fontWeight: DS.font.weight.bold, color: t[STATUS_COLOR_KEY[quoteStatus]] || t.muted } }, [{ value: "상담중", label: "📝 상담중" }, { value: "견적발송", label: "📋 견적발송" }, { value: "계약", label: "🤝 계약" }, { value: "시공중", label: "🔨 시공중" }, { value: "완료", label: "✅ 완료" }])),
-            Field(t, "연결 프로젝트", Sel(t, { value: linkedProjectId, onChange: (e) => setLinkedProjectId(e.target.value) }, [{ value: "", label: "선택 안함" }, ...projectsForLink.map((p) => ({ value: p.id, label: `${p.client ? p.client + " · " : ""}${p.name || "(제목 없음)"}` }))])),
           ]),
         ]),
         // 우: 수신처
@@ -1310,6 +1461,7 @@ function quoteExcelStyleTokens(styleName) {
 
 function DesignBrief(props) {
   const t = props.theme;
+  const openCommunity = props.openCommunity;
   const companyName = (props.company && props.company.name) || "Signplus+"; // 회사 정보 미설정 시 기본값
   const emptyForm = { client: "", industry: "", location: "", fontMood: FONT_MOODS[0], installNote: "" };
   const emptySignItem = () => ({ id: uid(), signType: SIGN_TYPES[0], width: "", height: "", location: "", dayEffect: "", nightEffect: "" });
@@ -1410,6 +1562,19 @@ function DesignBrief(props) {
         Btn(t, { key: 3, variant: "accent", onClick: handleSave }, [Ico.save({ size: 14 }), editingId ? " 수정 저장" : " 저장"]),
       ])
     ),
+    h(CommunityHeaderBlock, {
+      key: "community",
+      theme: t,
+      openCommunity,
+      title: "시안 제작 의뢰서",
+      sub: "상담 내용을 입력하면 디자이너가 바로 작업할 수 있는 의뢰서로 정리됩니다. 간판이 여러 종류면 항목을 추가하세요.",
+      right: h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center", flexWrap: "wrap" } }, [
+        toast && h("span", { key: 0, style: { fontSize: DS.font.size.base, color: toast.includes("실패") ? t.red : t.green, fontWeight: toast.includes("실패") ? DS.font.weight.semibold : DS.font.weight.regular } }, toast),
+        editingId && Btn(t, { key: 1, variant: "ghost", onClick: handleNew }, "새 의뢰서"),
+        Btn(t, { key: 2, variant: "blue", onClick: handlePdf }, [Ico.pdf({ size: 14 }), " PDF 저장"]),
+        Btn(t, { key: 3, variant: "accent", onClick: handleSave }, [Ico.save({ size: 14 }), editingId ? " 수정 저장" : " 저장"]),
+      ]),
+    }),
     h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.xl } }, [
       Card(t, { key: 1, style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
         h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
@@ -1519,6 +1684,7 @@ function calcLedModuleCount(area, density) {
 
 function LedCalculator(props) {
   const t = props.theme;
+  const openCommunity = props.openCommunity;
   const [sub, setSub] = useState("channel"); // channel | tube | board
 
   const subTab = (id, label) => Btn(t, {
@@ -1529,6 +1695,13 @@ function LedCalculator(props) {
 
   return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
     SectionTitle(t, "LED 계산기", "채널 간판 LED 모듈 · LED 형광등 · 전광판 스펙을 계산합니다."),
+    h(CommunityHeaderBlock, {
+      key: "community",
+      theme: t,
+      openCommunity,
+      title: "LED 계산기",
+      sub: "채널 간판 LED 모듈 · LED 형광등 · 전광판 스펙을 계산합니다.",
+    }),
     h("div", { key: "tabs", style: { display: "flex", gap: DS.spacing.md } }, [
       subTab("channel", "채널 LED 모듈"),
       subTab("tube", "LED 형광등"),
@@ -1761,6 +1934,7 @@ function pointInShape(shape, x, y) {
 
 function DrawingAnalyzer(props) {
   const t = props.theme;
+  const openCommunity = props.openCommunity;
   const canvasRef = useRef(null);
   const viewRef = useRef({ scale: 1, panX: 0, panY: 0 });
   const dragRef = useRef(null);
@@ -2111,6 +2285,20 @@ function DrawingAnalyzer(props) {
         Btn(t, { key: 1, variant: "accent", onClick: handlePickFile, disabled: loading }, [Ico.download({ size: 14 }), loading ? " 불러오는 중..." : " 파일 불러오기"]),
       ])
     ),
+    h(CommunityHeaderBlock, {
+      key: "community",
+      theme: t,
+      openCommunity,
+      title: "AI 도면 분석",
+      sub: "AI(Illustrator)/PDF/SVG 도면을 불러와 글자 단위 벡터 분석 · 제작 기준 LED 추천 · 자동 견적까지 연결합니다.",
+      right: h("div", { style: { display: "flex", gap: DS.spacing.md, alignItems: "center" } }, [
+        h("span", { key: "sl", style: { fontSize: DS.font.size.sm, color: t.muted, fontWeight: DS.font.weight.semibold } }, "도면 축척"),
+        Sel(t, { key: "sm", value: scaleMode, onChange: (e) => setScaleMode(e.target.value), style: { width: 110 } }, window.ScaleEngine.SCALE_PRESETS.map((p) => ({ value: p.id, label: p.label }))),
+        scaleMode === "custom" && TextInput(t, { key: "cr", type: "number", value: customRatio, onChange: (e) => setCustomRatio(e.target.value), placeholder: "예: 10", style: { width: 70, fontFamily: MONO } }),
+        Btn(t, { key: "dim", variant: showDimensions ? "primary" : "ghost", onClick: () => setShowDimensions((v) => !v), style: { fontSize: DS.font.size.sm } }, "치수 표시"),
+        Btn(t, { key: 1, variant: "accent", onClick: handlePickFile, disabled: loading }, [Ico.download({ size: 14 }), loading ? " 불러오는 중..." : " 파일 불러오기"]),
+      ]),
+    }),
     error && h("div", { style: { padding: DS.spacing.lg, borderRadius: DS.radius.md, background: t.red + "18", color: t.red, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold } }, error),
     showScaleWarning && h("div", { style: { padding: DS.spacing.lg, borderRadius: DS.radius.md, background: t.accentSoft, color: t.accent, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold } }, "도면 단위를 자동으로 인식하지 못했습니다 — 도면 축척을 선택하십시오."),
     h("div", { key: "main", style: { display: "flex", gap: DS.spacing.lg, alignItems: "stretch" } }, [
@@ -2461,12 +2649,14 @@ function effectiveProjectAmount(project, allQuotes) {
 function BarChart(t, data) {
   // data: [{label, value}]
   const max = Math.max(1, ...data.map((d) => d.value));
-  const W = 520, H = 180, pad = 28, bw = (W - pad * 2) / data.length;
-  return h("svg", { viewBox: `0 0 ${W} ${H}`, style: { width: "100%", height: "auto" } }, [
+  const W = 520, H = 220, pad = 28, bw = (W - pad * 2) / data.length;
+  return h("svg", { viewBox: `0 0 ${W} ${H}`, style: { width: "100%", height: "100%", display: "block" } }, [
     ...[0.25, 0.5, 0.75, 1].map((r, i) => h("line", { key: "g" + i, x1: pad, y1: H - pad - (H - pad * 2) * r, x2: W - pad, y2: H - pad - (H - pad * 2) * r, stroke: t.divider, strokeWidth: 1 })),
     ...data.map((d, i) => {
       const bh = (d.value / max) * (H - pad * 2);
-      const x = pad + i * bw + bw * 0.2, y = H - pad - bh, w = bw * 0.6;
+      const w = Math.min(bw * 0.56, 52);
+      const x = pad + i * bw + (bw - w) / 2;
+      const y = H - pad - bh;
       return h("g", { key: "b" + i }, [
         h("rect", { key: 1, x, y, width: w, height: bh, rx: DS.spacing.xs, fill: t.accent, opacity: 0.9 }),
         h("text", { key: 2, x: x + w / 2, y: H - pad + 14, textAnchor: "middle", fontSize: DS.font.size.xs, fill: t.muted }, d.label),
@@ -2481,6 +2671,7 @@ function ProjectDashboard(props) {
   const [projects, setProjects] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1440);
   const [selectedQuoteId, setSelectedQuoteId] = useState("");
   const emptyProjectForm = { client: "", name: "", amount: "", deadline: "", memo: "", priority: "보통", colorTag: "" };
   const [form, setForm] = useState(emptyProjectForm);
@@ -2516,6 +2707,23 @@ function ProjectDashboard(props) {
     window.addEventListener("sp-storage-changed", onStorageChanged);
     return () => window.removeEventListener("sp-storage-changed", onStorageChanged);
   }, []);
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const dashboardSingleColumn = viewportWidth <= 768;
+  const dashboardTwoColumn = viewportWidth <= 1400;
+  const dashboardStacked = viewportWidth <= 1100;
+  const dashboardKpiColumns = "repeat(4, minmax(0, 1fr))";
+  const dashboardTwoUpColumns = dashboardStacked ? "1fr" : "minmax(0, 2fr) minmax(320px, 1fr)";
+  const dashboardKanbanColumns = dashboardSingleColumn ? "1fr" : dashboardTwoColumn ? "repeat(2, minmax(0, 1fr))" : `repeat(${STATUSES.length}, minmax(0, 1fr))`;
+  const dashboardKpiGap = 16;
+  const dashboardCardPadding = `16px 16px`;
+  const dashboardChartHeight = dashboardStacked ? 380 : 400;
+  const dashboardKpiRowStyle = (height) => ({ display: "grid", gridTemplateColumns: dashboardKpiColumns, gap: dashboardKpiGap, gridAutoRows: height });
+  const dashboardUniformKpiHeight = 90;
   const persist = async (next) => { setProjects(next); await saveKey("sp2-projects", next); };
 
   // 신규 구조: 견적 쪽에 projectId를 새겨 quote.projectId(1:N)를 연결의 기준으로 삼는다.
@@ -2616,9 +2824,38 @@ function ProjectDashboard(props) {
   const COLOR_TAG_KEYS = ["", "accent", "blue", "green", "purple", "red"];
 
   // CRM 검색/필터/정렬 — 칸반에 "표시"되는 목록만 걸러내며, KPI/통계는 원본 projects 기준 그대로 유지
-  const clientOptions = ["전체", ...Array.from(new Set(projects.map((p) => p.client).filter(Boolean)))];
+  const clientOptions = ["전체", ...Array.from(new Set([
+    ...projects.map((p) => p.client).filter(Boolean),
+    ...quotes.map((q) => (q && q.client && q.client.name) || "").filter(Boolean),
+  ]))];
   const daysAgoISO = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
   const periodCutoff = periodFilter === "7일" ? daysAgoISO(7) : periodFilter === "30일" ? daysAgoISO(30) : periodFilter === "90일" ? daysAgoISO(90) : periodFilter === "올해" ? `${new Date().getFullYear()}-01-01` : null;
+  let visibleQuotes = (quotes || []).filter((q) => {
+    const normalizedStatus = normalizeStatus(q && q.status);
+    const clientName = (q && q.client && q.client.name) || "";
+    const projectName = (q && q.projectName) || "";
+    const memo = (q && q.note) || "";
+    if (hideCompleted && normalizedStatus === "완료") return false;
+    if (statusFilter !== "전체" && normalizedStatus !== statusFilter) return false;
+    if (clientFilter !== "전체" && clientName !== clientFilter) return false;
+    if (periodCutoff && String((q && (q.savedAt || q.quoteDate)) || "").slice(0, 10) < periodCutoff) return false;
+    if (search) {
+      const keyword = search.toLowerCase();
+      const haystack = `${q && q.quoteNo ? q.quoteNo : ""} ${projectName} ${clientName} ${memo}`.toLowerCase();
+      if (!haystack.includes(keyword)) return false;
+    }
+    return true;
+  });
+  visibleQuotes = [...visibleQuotes].sort((a, b) => {
+    if (sortBy === "amount") return (b.total || 0) - (a.total || 0);
+    return String(b.savedAt || b.quoteDate || "").localeCompare(String(a.savedAt || a.quoteDate || ""));
+  });
+  const filteredQuoteStatusCounts = STATUSES.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
+  visibleQuotes.forEach((q) => { try { const k = normalizeStatus(q && q.status); filteredQuoteStatusCounts[k] = (filteredQuoteStatusCounts[k] || 0) + 1; } catch (e) { } });
+  const quoteStatusBuckets = STATUSES.map((status) => ({
+    status,
+    items: visibleQuotes.filter((q) => normalizeStatus(q && q.status) === status),
+  }));
   let visibleProjects = projects.filter((p) => {
     if (hideCompleted && effectiveProjectStatus(p, quotes) === "완료") return false;
     if (statusFilter !== "전체" && effectiveProjectStatus(p, quotes) !== statusFilter) return false;
@@ -2636,8 +2873,13 @@ function ProjectDashboard(props) {
     return (b.createdAt || "").localeCompare(a.createdAt || "");
   });
   // 프리미엄 KPI 카드: 값 색상과 톤을 맞춘 상단 액센트 바 + 은은한 배경 글로우 + 아이콘 배지(차트/폼/칸반과 통일)
-  const KPI = (label, value, color, icon) => {
-    const accentColor = color || t.ink;
+  let kpiRenderIndex = 0;
+  const KPI = (label, value, color, icon, cardStyle, meta) => {
+    kpiRenderIndex += 1;
+    if (kpiRenderIndex === 5) return null;
+    const accentColor = icon === Ico.zap ? t.green : (color || t.ink);
+    const resolvedMeta = meta || (kpiRenderIndex === 4 ? `평균 마진율 ${totalBaseCost > 0 ? avgMarginRate : 0}%` : null);
+    const rowCardStyle = { minHeight: dashboardUniformKpiHeight, maxHeight: dashboardUniformKpiHeight, padding: `14px 16px` };
     return h("div", {
       key: label,
       style: {
@@ -2646,24 +2888,30 @@ function ProjectDashboard(props) {
         background: t.surface,
         border: `1px solid ${t.divider}`,
         borderRadius: DS.radius.lg,
-        padding: `${DS.spacing.xl}px ${DS.spacing.xxl}px`,
+        padding: `16px 16px`,
         boxShadow: DS.shadow.sm,
+        boxSizing: "border-box",
+        ...rowCardStyle,
+        ...(cardStyle || {}),
       },
     }, [
       h("div", { key: "bar", style: { position: "absolute", top: 0, left: 0, right: 0, height: 3, background: accentColor } }),
-      h("div", { key: "glow", style: { position: "absolute", right: -18, bottom: -18, width: 72, height: 72, borderRadius: DS.radius.pill, background: `${accentColor}14` } }),
-      h("div", { key: "head", style: { position: "relative", display: "flex", alignItems: "center", gap: DS.spacing.sm, marginBottom: DS.spacing.sm } }, [
-        h("span", { key: 1, style: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: DS.radius.sm, background: `${accentColor}14`, color: accentColor, flexShrink: 0 } }, (icon || Ico.calc)({ size: 13 })),
-        h("span", { key: 2, style: { fontSize: DS.font.size.xs, color: t.muted, fontWeight: DS.font.weight.semibold, letterSpacing: 0.5, textTransform: "uppercase" } }, label),
+      h("div", { key: "glow", style: { position: "absolute", right: -8, bottom: -8, width: 36, height: 36, borderRadius: DS.radius.pill, background: `${accentColor}14` } }),
+      h("div", { key: "head", style: { position: "relative", display: "flex", alignItems: "center", gap: 7, marginBottom: 6 } }, [
+        h("span", { key: 1, style: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, borderRadius: DS.radius.sm, background: `${accentColor}14`, color: accentColor, flexShrink: 0 } }, (icon || Ico.calc)({ size: 11 })),
+        h("span", { key: 2, style: { fontSize: 12, color: t.muted, fontWeight: DS.font.weight.semibold, letterSpacing: 0.3, textTransform: "uppercase", lineHeight: 1.2 } }, label),
       ]),
-      h("div", { key: 2, style: { position: "relative", fontSize: DS.font.size.display, fontWeight: DS.font.weight.bold, fontFamily: MONO, color: accentColor, marginTop: DS.spacing.xs, letterSpacing: -0.4 } }, value),
+      h("div", { key: 2, style: { position: "relative", display: "flex", flexDirection: "column", gap: resolvedMeta ? 6 : 0 } }, [
+        h("div", { key: "value", style: { fontSize: 23, fontWeight: DS.font.weight.bold, fontFamily: MONO, color: accentColor, marginTop: 1, letterSpacing: -0.25, lineHeight: 1.02 } }, value),
+        resolvedMeta && h("div", { key: "meta", style: { fontSize: 11, color: t.muted, fontWeight: DS.font.weight.semibold, lineHeight: 1.25 } }, resolvedMeta),
+      ]),
     ]);
   };
 
   return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.xl } }, [
     SectionTitle(t, "프로젝트 대시보드", "견적 데이터와 프로젝트 파이프라인이 자동으로 연동됩니다."),
     // 견적 기반 원가/마진 요약
-    activeQuotes.length > 0 && h("div", { key: "q-kpi", style: { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: DS.spacing.lg } }, [
+    activeQuotes.length > 0 && h("div", { key: "q-kpi", style: dashboardKpiRowStyle(dashboardUniformKpiHeight) }, [
       KPI("발주·진행 건수", activeQuotes.length + "건", null, Ico.file),
       KPI("총 원가 지출", won(totalBaseCost), null, Ico.download),
       KPI("총 판매 금액", won(totalSellAmount), t.blue, Ico.arrowUp),
@@ -2671,32 +2919,34 @@ function ProjectDashboard(props) {
       KPI("평균 마진율", (totalBaseCost > 0 ? avgMarginRate : 0) + "%", t.accent, Ico.calc),
     ]),
     // 이번 달 요약
-    h("div", { key: "month-kpi", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: DS.spacing.lg } }, [
+    h("div", { key: "month-kpi", style: dashboardKpiRowStyle(dashboardUniformKpiHeight) }, [
       KPI("이번 달 견적", thisMonthQuotes + "건", null, Ico.file),
       KPI("이번 달 원가", won(thisMonthBase), null, Ico.download),
       KPI("이번 달 판매", won(thisMonthSell), t.blue, Ico.arrowUp),
       KPI("이번 달 마진", won(thisMonthMargin), thisMonthMargin > 0 ? t.green : t.red, Ico.zap),
     ]),
     // 기존 파이프라인 KPI
-    h("div", { key: "kpi", style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: DS.spacing.lg } }, [
+    h("div", { key: "kpi", style: dashboardKpiRowStyle(dashboardUniformKpiHeight) }, [
       KPI("전체 파이프라인", won(totalPipeline), null, Ico.grid),
       KPI("계약 금액", won(contractedSum), t.accent, Ico.check),
       KPI("완료 매출", won(doneSum), t.green, Ico.check),
       KPI("수주 전환율", winRate + "%", t.blue, Ico.arrowUp),
     ]),
     // 차트 + 입력
-    h("div", { key: "chart", style: { display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: DS.spacing.xl } }, [
+    h("div", { key: "chart", style: { display: "grid", gridTemplateColumns: dashboardTwoUpColumns, gap: DS.spacing.xl, alignItems: "stretch" } }, [
       // 프로젝트 파이프라인 차트 카드 — KPI/칸반/추가폼과 동일한 액센트 바 + 글로우 모티프로 통일 (차트/데이터 로직은 동일)
       h("div", {
         key: 1,
         style: {
           position: "relative",
-          overflow: "hidden",
+          overflow: "visible",
           background: t.surface,
           border: `1px solid ${t.divider}`,
           borderRadius: DS.radius.lg,
-          padding: DS.spacing.xxl,
+          padding: dashboardCardPadding,
           boxShadow: DS.shadow.sm,
+          minHeight: dashboardChartHeight,
+          boxSizing: "border-box",
         },
       }, [
         h("div", { key: "bar", style: { position: "absolute", top: 0, left: 0, right: 0, height: 3, background: t.blue } }),
@@ -2705,45 +2955,85 @@ function ProjectDashboard(props) {
           h("span", { key: 1, style: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: DS.radius.sm, background: `${t.blue}14`, color: t.blue } }, Ico.arrowUp({ size: 13 })),
           h("span", { key: 2, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink } }, "최근 6개월 견적 매출 (발주/진행/완료)"),
         ]),
-        h("div", { key: 2, style: { position: "relative" } }, BarChart(t, monthData)),
+        h("div", { key: 2, style: { position: "relative", height: Math.min(dashboardChartHeight, 400) } }, BarChart(t, monthData)),
         h("div", { key: 3, style: { position: "relative", fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.md } }, "※ 견적계산기에서 '발주' 이상 상태로 저장된 견적이 자동으로 집계됩니다."),
       ]),
-      // 프로젝트 추가 폼 — KPI 카드와 동일한 액센트 바 + 글로우 모티프로 통일 (입력/버튼 기능은 동일)
+      // 상태 작업 리스트 — 검색/필터와 같은 견적 기준으로 현재 흐름을 바로 본다.
       h("div", {
         key: 2,
         style: {
           position: "relative",
-          overflow: "hidden",
+          overflow: "visible",
           background: t.surface,
           border: `1px solid ${t.divider}`,
           borderRadius: DS.radius.lg,
-          padding: DS.spacing.xxl,
+          padding: dashboardCardPadding,
           boxShadow: DS.shadow.sm,
+          minHeight: dashboardChartHeight,
+          boxSizing: "border-box",
         },
       }, [
         h("div", { key: "bar", style: { position: "absolute", top: 0, left: 0, right: 0, height: 3, background: t.accent } }),
         h("div", { key: "glow", style: { position: "absolute", right: -18, bottom: -18, width: 72, height: 72, borderRadius: DS.radius.pill, background: `${t.accent}14` } }),
         h("div", { key: 1, style: { position: "relative", display: "flex", alignItems: "center", gap: DS.spacing.sm, marginBottom: DS.spacing.xl } }, [
-          h("span", { key: 1, style: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: DS.radius.sm, background: `${t.accent}14`, color: t.accent } }, (editingProjectId ? Ico.edit : Ico.plus)({ size: 13 })),
-          h("span", { key: 2, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink } }, editingProjectId ? "프로젝트 수정" : "프로젝트 추가"),
+          h("span", { key: 1, style: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: DS.radius.sm, background: `${t.accent}14`, color: t.accent } }, Ico.grid({ size: 13 })),
+          h("span", { key: 2, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink } }, "견적 상태 작업 리스트"),
         ]),
-        h("div", { key: 2, style: { position: "relative", display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
-          Field(t, "거래처", TextInput(t, { value: form.client, onChange: (e) => setForm({ ...form, client: e.target.value }) })),
-          Field(t, "프로젝트명", TextInput(t, { value: form.name, onChange: (e) => setForm({ ...form, name: e.target.value }) })),
-          h("div", { key: 3, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
-            Field(t, "금액", TextInput(t, { type: "number", value: form.amount, onChange: (e) => setForm({ ...form, amount: e.target.value }), style: { fontFamily: MONO } })),
-            Field(t, "마감일", TextInput(t, { type: "date", value: form.deadline, onChange: (e) => setForm({ ...form, deadline: e.target.value }) })),
-          ]),
-          h("div", { key: 4, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
-            Field(t, "우선순위", Sel(t, { value: form.priority, onChange: (e) => setForm({ ...form, priority: e.target.value }) }, ["높음", "보통", "낮음"])),
-            Field(t, "색상 태그", Sel(t, { value: form.colorTag, onChange: (e) => setForm({ ...form, colorTag: e.target.value }) }, [{ value: "", label: "없음" }, { value: "accent", label: "주황" }, { value: "blue", label: "파랑" }, { value: "green", label: "초록" }, { value: "purple", label: "보라" }, { value: "red", label: "빨강" }])),
-          ]),
-          !editingProjectId && Field(t, "연결할 견적 (선택)", Sel(t, { value: selectedQuoteId, onChange: (e) => setSelectedQuoteId(e.target.value) }, [{ value: "", label: "선택 안함" }, ...quotes.map((q) => ({ value: q.id, label: `${q.quoteNo ? q.quoteNo + " · " : ""}${q.projectName || (q.client && q.client.name) || "(제목 없음)"}` }))])),
-          Field(t, "메모", TextArea(t, { value: form.memo, onChange: (e) => setForm({ ...form, memo: e.target.value }), rows: 2, placeholder: "참고 메모..." })),
-          h("div", { key: 5, style: { display: "flex", gap: DS.spacing.sm } }, [
-            Btn(t, { variant: "accent", onClick: addProject, style: { flex: 1, justifyContent: "center", padding: `${DS.spacing.md}px ${DS.spacing.xl}px`, marginTop: DS.spacing.xs } }, [(editingProjectId ? Ico.save : Ico.plus)({ size: 14 }), editingProjectId ? " 수정 저장" : " 추가"]),
-            editingProjectId && Btn(t, { variant: "ghost", onClick: cancelEditProject, style: { marginTop: DS.spacing.xs } }, "취소"),
-          ]),
+        h("div", { key: 2, style: { position: "relative", display: "flex", flexDirection: "column", gap: DS.spacing.md } }, [
+          ...quoteStatusBuckets.map(({ status, items }) => h("div", {
+            key: status,
+            style: {
+              border: `1px solid ${t.divider}`,
+              borderRadius: DS.radius.md,
+              background: t.surface2,
+              padding: `${DS.spacing.md}px ${DS.spacing.lg}px`,
+              display: "flex",
+              flexDirection: "column",
+              gap: DS.spacing.sm,
+            },
+          }, [
+            h("div", {
+              key: "head",
+              style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: DS.spacing.sm },
+            }, [
+              h("div", { key: "label", style: { display: "flex", alignItems: "center", gap: DS.spacing.sm, minWidth: 0 } }, [
+                h("span", { key: "dot", style: { width: 10, height: 10, borderRadius: DS.radius.pill, background: STATUS_COLOR[status] } }),
+                h("span", { key: "text", style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: STATUS_COLOR[status] } }, status),
+              ]),
+              h("span", {
+                key: "count",
+                style: {
+                  minWidth: 28,
+                  padding: `2px 8px`,
+                  borderRadius: DS.radius.pill,
+                  background: `${STATUS_COLOR[status]}18`,
+                  color: STATUS_COLOR[status],
+                  fontSize: DS.font.size.xs,
+                  fontWeight: DS.font.weight.bold,
+                  textAlign: "center",
+                },
+              }, `${filteredQuoteStatusCounts[status] || 0}건`),
+            ]),
+            items.length
+              ? h("div", { key: "items", style: { display: "flex", flexDirection: "column", gap: DS.spacing.xs } },
+                  items.slice(0, 4).map((q) => h("button", {
+                    key: q.id,
+                    onClick: () => props.onOpenQuote && props.onOpenQuote(q.id),
+                    style: {
+                      border: "none",
+                      background: "transparent",
+                      padding: 0,
+                      textAlign: "left",
+                      cursor: props.onOpenQuote ? "pointer" : "default",
+                      color: t.ink,
+                    },
+                  }, [
+                    h("div", { key: "line1", style: { fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, color: t.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, `${q.quoteNo || "-"} · ${q.projectName || (q.client && q.client.name) || "제목 없음"}`),
+                    h("div", { key: "line2", style: { fontSize: 11, color: t.muted, marginTop: 2 } }, `${won(q.total || 0)}${q.savedAt ? ` · ${String(q.savedAt).slice(0, 10)}` : ""}`),
+                  ]))
+                )
+              : h("div", { key: "empty", style: { fontSize: DS.font.size.xs, color: t.muted } }, "현재 저장된 견적이 없습니다."),
+          ])),
         ]),
       ]),
     ]),
@@ -2761,10 +3051,51 @@ function ProjectDashboard(props) {
         h("input", { type: "checkbox", checked: hideCompleted, onChange: (e) => setHideCompleted(e.target.checked) }),
         "완료 숨기기",
       ]),
-      h("span", { key: "count", style: { fontSize: DS.font.size.xs, color: t.muted, marginLeft: "auto" } }, `${visibleProjects.length} / ${projects.length}건 표시`),
+      h("span", { key: "count", style: { fontSize: DS.font.size.xs, color: t.muted, marginLeft: "auto" } }, `견적 ${visibleQuotes.length} / ${quotes.length}건 · 프로젝트 ${visibleProjects.length} / ${projects.length}건 표시`),
+    ]),
+    loaded && search && h("div", {
+      key: "quote-search-results",
+      style: {
+        position: "relative",
+        background: t.surface,
+        border: `1px solid ${t.divider}`,
+        borderRadius: DS.radius.lg,
+        padding: DS.spacing.xxl,
+        boxShadow: DS.shadow.sm,
+        display: "flex",
+        flexDirection: "column",
+        gap: DS.spacing.md,
+      },
+    }, [
+      h("div", { key: "head", style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: DS.spacing.sm } }, [
+        h("div", { key: 1, style: { fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold, color: t.ink } }, "검색된 견적 리스트"),
+        h("div", { key: 2, style: { fontSize: DS.font.size.xs, color: t.muted, fontWeight: DS.font.weight.semibold } }, `${visibleQuotes.length}건`),
+      ]),
+      visibleQuotes.length
+        ? h("div", { key: "items", style: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: DS.spacing.md } },
+            visibleQuotes.map((q) => h("button", {
+              key: q.id,
+              onClick: () => props.onOpenQuote && props.onOpenQuote(q.id),
+              style: {
+                border: `1px solid ${t.divider}`,
+                borderRadius: DS.radius.md,
+                background: t.surface2,
+                padding: `${DS.spacing.md}px ${DS.spacing.lg}px`,
+                textAlign: "left",
+                cursor: props.onOpenQuote ? "pointer" : "default",
+                color: t.ink,
+              },
+            }, [
+              h("div", { key: "line1", style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, q.projectName || (q.client && q.client.name) || "제목 없음"),
+              h("div", { key: "line2", style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xs } }, `${q.quoteNo || "-"} · ${(q.client && q.client.name) || "-"}`),
+              h("div", { key: "line3", style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.semibold, color: t.accent, marginTop: DS.spacing.sm, fontFamily: MONO } }, won(q.total || 0)),
+              h("div", { key: "line4", style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: 2 } }, `${normalizeStatus(q.status)} · ${String(q.savedAt || q.quoteDate || "").slice(0, 10) || "-"}`),
+            ]))
+          )
+        : h("div", { key: "empty", style: { fontSize: DS.font.size.sm, color: t.muted } }, "조건에 맞는 견적이 없습니다."),
     ]),
     // 칸반 (프로젝트 상태 현황) — KPI 카드와 동일한 액센트 바 + 글로우 모티프로 통일
-    loaded && h("div", { key: "kanban", style: { display: "grid", gridTemplateColumns: `repeat(${STATUSES.length}, 1fr)`, gap: DS.spacing.lg } },
+    false && h("div", { key: "kanban", style: { display: "grid", gridTemplateColumns: dashboardKanbanColumns, gap: DS.spacing.lg } },
       STATUSES.map((status) => h("div", { key: status, style: { display: "flex", flexDirection: "column", gap: DS.spacing.md } }, [
         h("div", { key: 1, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${DS.spacing.xs}px ${DS.spacing.sm}px`, borderBottom: `2px solid ${STATUS_COLOR[status]}` } }, [
           h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: DS.spacing.sm } }, [
@@ -3493,9 +3824,9 @@ function App() {
     // 콘텐츠
     h("div", { key: "main", style: { flex: 1, padding: DS.spacing.xxxl + DS.spacing.xs, overflowY: "auto" } }, [
       tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, onSaveCompany: saveCompany, presetLabel, vendors, loadVendorPresets, openQuoteId, onOpenQuoteHandled: () => setOpenQuoteId(null), pendingItems: pendingQuoteItems, onPendingItemsHandled: () => setPendingQuoteItems(null), openCommunity }),
-      tab === "brief" && h(DesignBrief, { key: "b", theme: t, company }),
-      tab === "led" && h(LedCalculator, { key: "l", theme: t }),
-      tab === "drawing" && h(DrawingAnalyzer, { key: "va", theme: t, presets, onSendToQuote: sendDrawingItemsToQuote }),
+      tab === "brief" && h(DesignBrief, { key: "b", theme: t, company, openCommunity }),
+      tab === "led" && h(LedCalculator, { key: "l", theme: t, openCommunity }),
+      tab === "drawing" && h(DrawingAnalyzer, { key: "va", theme: t, presets, onSendToQuote: sendDrawingItemsToQuote, openCommunity }),
       tab === "dashboard" && h(ProjectDashboard, { key: "d", theme: t, onOpenQuote: openQuoteInCalculator }),
       tab === "db" && h(DatabaseManager, { key: "db", theme: t, presets, onPresetsChange: changePresets, presetLabel, onPresetLabelChange: changePresetLabel, vendors, onAddVendor: addVendor, onRemoveVendor: removeVendor, loadVendorPresets, saveVendorPresets }),
       tab === "settings" && h(SettingsPage, { key: "settings", theme: t, initialSection: settingsSection, company, onSaveCompany: saveCompany, vendors, license, onActivated: checkLicense, appTheme: mode, onChangeAppTheme: changeTheme }),
