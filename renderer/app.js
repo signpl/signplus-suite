@@ -719,6 +719,7 @@ function QuoteCalculator(props) {
   const t = props.theme;
   const presets = props.presets;
   const company = props.company;
+  const openCommunity = props.openCommunity;
   const [client, setClient] = useState({ name: "", manager: "", tel: "" });
   const [projectName, setProjectName] = useState("");
   const [quoteNo, setQuoteNo] = useState("");
@@ -869,6 +870,116 @@ function QuoteCalculator(props) {
       ])
     ),
     // 프리셋 패널 — 제일에코 단가표에서 골라 담기 (카테고리 → 중분류 아코디언)
+    Card(t, { style: { padding: DS.spacing.md } }, [
+      h("div", {
+        key: "community-main",
+        style: {
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr)",
+          gap: DS.spacing.md,
+          alignItems: "stretch",
+        },
+      }, [
+        h("button", {
+          key: "community-brand",
+          onClick: openCommunity,
+          style: {
+            border: "none",
+            borderRadius: DS.radius.lg,
+            background: `linear-gradient(135deg, ${t.accentSoft} 0%, ${t.surface2} 58%, ${t.bg} 100%)`,
+            padding: `${DS.spacing.xl}px ${DS.spacing.xl}px`,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            gap: 6,
+            textAlign: "left",
+            cursor: "pointer",
+            minHeight: 116,
+            boxShadow: DS.shadow.sm,
+          },
+        }, [
+          h("div", { key: "title", style: { fontSize: DS.font.size.xxl, fontWeight: DS.font.weight.heavy, color: t.ink, letterSpacing: -0.4 } }, "간판인 광장"),
+          h("div", { key: "by", style: { fontSize: DS.font.size.md, fontWeight: DS.font.weight.bold, color: t.accent } }, "by Signplus"),
+          h("div", { key: "desc", style: { marginTop: 2, fontSize: DS.font.size.sm, color: t.muted, lineHeight: 1.55 } }, "대한민국 간판인들의 정보공유 플랫폼"),
+        ]),
+        h("button", {
+          key: "community-vendor",
+          onClick: openCommunity,
+          style: {
+            border: `1px solid ${t.divider}`,
+            borderRadius: DS.radius.lg,
+            background: t.surface,
+            padding: `${DS.spacing.lg}px ${DS.spacing.lg}px`,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: DS.spacing.sm,
+            textAlign: "left",
+            cursor: "pointer",
+            minHeight: 116,
+            boxShadow: DS.shadow.sm,
+          },
+        }, [
+          h("div", { key: "copy", style: { display: "flex", flexDirection: "column", gap: 6 } }, [
+            h("div", { key: "title", style: { fontSize: DS.font.size.lg, fontWeight: DS.font.weight.heavy, color: t.ink, letterSpacing: -0.2 } }, "이번 주 추천업체"),
+            h("div", { key: "desc", style: { fontSize: DS.font.size.sm, color: t.muted, lineHeight: 1.55, opacity: 0.92 } }, "공식 추천 파트너와 이번 주 특가를 확인해보세요."),
+          ]),
+          h("div", {
+            key: "cta",
+            style: {
+              alignSelf: "flex-start",
+              minWidth: 74,
+              padding: `7px 12px`,
+              borderRadius: DS.radius.md,
+              border: `1px solid ${t.divider}`,
+              background: t.surface2,
+              fontSize: DS.font.size.xs,
+              fontWeight: DS.font.weight.bold,
+              color: t.accent,
+              textAlign: "center",
+            },
+          }, "자세히 보기"),
+        ]),
+        h("button", {
+          key: "community-groupbuy",
+          onClick: openCommunity,
+          style: {
+            border: `1px solid ${t.divider}`,
+            borderRadius: DS.radius.lg,
+            background: t.surface,
+            padding: `${DS.spacing.lg}px ${DS.spacing.lg}px`,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: DS.spacing.sm,
+            textAlign: "left",
+            cursor: "pointer",
+            minHeight: 116,
+            boxShadow: DS.shadow.sm,
+          },
+        }, [
+          h("div", { key: "copy", style: { display: "flex", flexDirection: "column", gap: 6 } }, [
+            h("div", { key: "title", style: { fontSize: DS.font.size.lg, fontWeight: DS.font.weight.heavy, color: t.ink, letterSpacing: -0.2 } }, "공동구매"),
+            h("div", { key: "desc", style: { fontSize: DS.font.size.sm, color: t.muted, lineHeight: 1.55, opacity: 0.92 } }, "LED, SMPS, 아크릴 공동구매 소식을 확인해보세요."),
+          ]),
+          h("div", {
+            key: "cta",
+            style: {
+              alignSelf: "flex-start",
+              minWidth: 74,
+              padding: `7px 12px`,
+              borderRadius: DS.radius.md,
+              border: `1px solid ${t.divider}`,
+              background: t.surface2,
+              fontSize: DS.font.size.xs,
+              fontWeight: DS.font.weight.bold,
+              color: t.accent,
+              textAlign: "center",
+            },
+          }, "바로가기"),
+        ]),
+      ]),
+    ]),
     presetOpen && Card(t, { key: "preset", style: { padding: DS.spacing.lg } }, (() => {
       const cats = PRESET_CATS;
       const isSearching = !!pSearch;
@@ -3367,31 +3478,6 @@ function App() {
         h("button", { key: 1, onClick: handleBackupExport, title: "지금까지 저장된 견적·시안의뢰서·거래처·단가 전부를 파일 하나로 내보냅니다.", style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: DS.spacing.sm, padding: `${DS.spacing.md}px ${DS.spacing.sm}px`, borderRadius: DS.radius.md, border: `1px solid ${t.divider}`, cursor: "pointer", background: t.surface2, color: t.muted, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, fontFamily: FONT } }, [Ico.download({ size: 13 }), "백업"]),
         h("button", { key: 2, onClick: handleBackupImport, title: "백업 파일을 불러와 데이터를 복원합니다. (재설치·새 컴퓨터 이전 시 사용)", style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: DS.spacing.sm, padding: `${DS.spacing.md}px ${DS.spacing.sm}px`, borderRadius: DS.radius.md, border: `1px solid ${t.divider}`, cursor: "pointer", background: t.surface2, color: t.muted, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.semibold, fontFamily: FONT } }, [Ico.book({ size: 13 }), "복원"]),
       ]),
-      h("button", {
-        key: "community",
-        onClick: openCommunity,
-        title: "대한민국 간판인들의 정보공유 플랫폼",
-        style: {
-          display: "flex",
-          alignItems: "flex-start",
-          gap: DS.spacing.sm,
-          padding: `${DS.spacing.md}px ${DS.spacing.md}px`,
-          borderRadius: DS.radius.md,
-          border: `1px solid ${t.divider}`,
-          cursor: "pointer",
-          background: t.surface2,
-          color: t.ink,
-          fontFamily: FONT,
-          textAlign: "left",
-          marginTop: DS.spacing.sm,
-        },
-      }, [
-        h("span", { key: 1, style: { display: "inline-flex", marginTop: 2, color: t.accent } }, Ico.book({ size: 15 })),
-        h("span", { key: 2, style: { display: "flex", flexDirection: "column", gap: 2, flex: 1 } }, [
-          h("span", { key: "title", style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.ink } }, "간판인 광장 by Signplus"),
-          h("span", { key: "desc", style: { fontSize: DS.font.size.xs, color: t.muted, lineHeight: 1.45 } }, "대한민국 간판인들의 정보공유 플랫폼"),
-        ]),
-      ]),
       backupMsg && h("div", { key: 5, style: { fontSize: DS.font.size.xs, color: backupMsg.includes("실패") ? t.red : t.green, marginTop: DS.spacing.sm, textAlign: "center", fontWeight: DS.font.weight.semibold } }, backupMsg),
       license && license.activated && licenseTier(license) === "trial" && typeof license.daysLeft === "number" && h("div", { key: 6, style: { marginTop: DS.spacing.md, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, background: license.daysLeft <= 7 ? t.red + "18" : t.surface2, border: `1px solid ${license.daysLeft <= 7 ? t.red + "44" : t.divider}`, textAlign: "center" } }, [
         h("div", { key: 0, style: { fontSize: DS.font.size.xs, fontWeight: DS.font.weight.bold, color: t.muted, letterSpacing: 0.4 } }, "Trial Version"),
@@ -3406,7 +3492,7 @@ function App() {
     ]),
     // 콘텐츠
     h("div", { key: "main", style: { flex: 1, padding: DS.spacing.xxxl + DS.spacing.xs, overflowY: "auto" } }, [
-      tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, onSaveCompany: saveCompany, presetLabel, vendors, loadVendorPresets, openQuoteId, onOpenQuoteHandled: () => setOpenQuoteId(null), pendingItems: pendingQuoteItems, onPendingItemsHandled: () => setPendingQuoteItems(null) }),
+      tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, onSaveCompany: saveCompany, presetLabel, vendors, loadVendorPresets, openQuoteId, onOpenQuoteHandled: () => setOpenQuoteId(null), pendingItems: pendingQuoteItems, onPendingItemsHandled: () => setPendingQuoteItems(null), openCommunity }),
       tab === "brief" && h(DesignBrief, { key: "b", theme: t, company }),
       tab === "led" && h(LedCalculator, { key: "l", theme: t }),
       tab === "drawing" && h(DrawingAnalyzer, { key: "va", theme: t, presets, onSendToQuote: sendDrawingItemsToQuote }),
