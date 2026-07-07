@@ -17,6 +17,7 @@
     : (typeof window !== "undefined" ? window.SignRules : null);
 
   const SMPS_LINEUP = [30, 60, 100, 150, 200, 300, 400, 500, 600];
+  const LED_MODULE_DEFAULT_DENSITY = 75;
   const LEAD_PER_MODULE_MM = 300; // 모듈 1개당 리드선(연결선) 여유 길이
   const MAIN_RUN_PER_SMPS_MM = 2000; // SMPS 1대당 본선(전원 인입) 여유 길이
 
@@ -33,18 +34,29 @@
     return m ? parseFloat(m[1]) : 1;
   }
 
+  function roundToHundredBracket(sizeMm) {
+    const n = Number(sizeMm) || 0;
+    if (n <= 0) return 0;
+    const low = Math.floor(n / 100) * 100;
+    const high = Math.ceil(n / 100) * 100;
+    if (low === high) return low;
+    return n < low + 50 ? low : high;
+  }
+
   // opts: { avgHeightMm, totalPerimeterMm, glyphCount }
   function recommendProduction(opts) {
     const o = opts || {};
     const avgHeightMm = Number(o.avgHeightMm) || 0;
-    const totalPerimeterM = (Number(o.totalPerimeterMm) || 0) / 1000;
     const glyphCount = Number(o.glyphCount) || 0;
+    const moduleDensity = Number(o.moduleDensity) || LED_MODULE_DEFAULT_DENSITY;
+    const moduleBaseSizeMm = roundToHundredBracket(avgHeightMm);
 
     const rule = SignRules ? SignRules.findRuleForSize(avgHeightMm) : { sizeMm: avgHeightMm, ledDensityPerM: 3, channelDepthMm: 60, ledType: "3구 1W", strokeWidthMm: 12 };
     const wattagePerLed = wattageOf(rule.ledType);
 
     // LED는 획(채널 테두리)을 따라 일정 간격으로 배치 — 면적이 아니라 외곽길이 기준(제작 실무 방식)
-    const moduleCount = Math.ceil(totalPerimeterM * rule.ledDensityPerM);
+    const charAreaSqM = (moduleBaseSizeMm / 1000) * (moduleBaseSizeMm / 1000) * glyphCount;
+    const moduleCount = Math.ceil((charAreaSqM * moduleDensity) - 1e-9);
     const totalWatt = Math.round(moduleCount * wattagePerLed * 10) / 10;
     const smps = recommendSmps(moduleCount);
     const wireLengthM = Math.round(((moduleCount * LEAD_PER_MODULE_MM) + (smps.qty * MAIN_RUN_PER_SMPS_MM)) / 100) / 10;
@@ -57,6 +69,9 @@
       strokeWidthMm: rule.strokeWidthMm,
       ledType: rule.ledType,
       wattagePerLed,
+      moduleDensity,
+      moduleBaseSizeMm,
+      charAreaSqM,
       moduleCount,
       totalWatt,
       smpsCap: smps.cap,

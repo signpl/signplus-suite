@@ -30,6 +30,33 @@
     return best;
   }
 
+  function specNumberOf(preset, numberRe) {
+    if (!preset) return 0;
+    const m = numberRe.exec(preset.spec || "");
+    return m ? parseFloat(m[1]) : 0;
+  }
+
+  function roundToHundredBracket(sizeMm) {
+    const n = Number(sizeMm) || 0;
+    if (n <= 0) return 0;
+    const low = Math.floor(n / 100) * 100;
+    const high = Math.ceil(n / 100) * 100;
+    if (low === high) return low;
+    return n < low + 50 ? low : high;
+  }
+
+  function priceBracketBySpecNumber(presets, cat, numberRe, target, extraFilter) {
+    const rounded = roundToHundredBracket(target);
+    const matches = (presets || []).filter((p) => p.cat === cat && numberRe.test(p.spec || "") && (!extraFilter || extraFilter(p)));
+    if (!matches.length) return { preset: null, size: rounded };
+
+    const exact = matches.find((p) => specNumberOf(p, numberRe) === rounded);
+    if (exact) return { preset: exact, size: rounded };
+
+    const nearest = nearestBySpecNumber(matches, cat, numberRe, rounded);
+    return { preset: nearest, size: nearest ? specNumberOf(nearest, numberRe) : rounded };
+  }
+
   // "채널" 카테고리 단가표 항목만 뽑아 "제품 선택" 드롭다운 목록으로 쓴다 — 목록 자체가
   // 환경설정 > 단가표에서 자동 생성되므로, 표에 상품을 추가/수정하면 다음부터 그대로 반영된다.
   function listChannelPresets(presets) {
@@ -47,9 +74,17 @@
     const list = presets || [];
     const c = ctx || {};
 
-    const channelPreset = (c.channelPresetId ? findPreset(list, (p) => p.id === c.channelPresetId) : null)
-      || nearestBySpecNumber(list, "채널", /^(\d+)\s*각$/, c.avgSizeMm || 0, (p) => (p.sub || "").includes("갈바후광"))
-      || nearestBySpecNumber(list, "채널", /^(\d+)\s*각$/, c.avgSizeMm || 0);
+    const channelNumberRe = /^(\d+)\s*각$/;
+    const selectedChannelPreset = c.channelPresetId ? findPreset(list, (p) => p.id === c.channelPresetId) : null;
+    const selectedSub = selectedChannelPreset && selectedChannelPreset.sub;
+    const channelPick = selectedSub
+      ? priceBracketBySpecNumber(list, "채널", channelNumberRe, c.avgSizeMm || 0, (p) => p.sub === selectedSub)
+      : (
+        priceBracketBySpecNumber(list, "채널", channelNumberRe, c.avgSizeMm || 0, (p) => (p.sub || "").includes("타카")).preset
+          ? priceBracketBySpecNumber(list, "채널", channelNumberRe, c.avgSizeMm || 0, (p) => (p.sub || "").includes("타카"))
+          : priceBracketBySpecNumber(list, "채널", channelNumberRe, c.avgSizeMm || 0)
+      );
+    const channelPreset = channelPick.preset || selectedChannelPreset;
     // "갈바"는 채널 카테고리(가공+원자재 이미 포함) 밖에서는 지주/프레임 등 무관한 품목 이름에도
     // 흔히 등장해 오검색 위험이 크다 — 신뢰할 수 있는 별도 "원자재" 카테고리가 생기기 전까지는
     // 0으로 두고 사용자가 직접 입력하게 한다(잘못된 단가를 지어내는 것보다 안전).
@@ -69,6 +104,8 @@
 
     return {
       channelUnitPrice: channelPreset ? channelPreset.price : 0,
+      channelPriceSizeMm: channelPick.size || specNumberOf(channelPreset, channelNumberRe) || roundToHundredBracket(c.avgSizeMm || 0),
+      channelPresetName: channelPreset ? channelPreset.name : "",
       galvaUnitPrice: galvaPreset ? galvaPreset.price : 0,
       generalAssemblyUnitPrice: generalAssemblyPreset ? generalAssemblyPreset.price : 0,
       acrylicUnitPricePerSqM: acrylicPreset ? acrylicPreset.price : 0,
@@ -91,54 +128,30 @@
   function buildQuoteItems(opts) {
     const o = opts || {};
     const items = [];
+    const glyphCount = Number(o.glyphCount) || 0;
+    const measuredChannelSize = Math.round(o.channelAvgSizeMm || 0);
+    const channelSize = Math.round(o.channelPriceSizeMm || o.channelAvgSizeMm || 0);
+    const moduleSize = Math.round(o.moduleBaseSizeMm || o.channelAvgSizeMm || 0);
+    const moduleDensity = Number(o.moduleDensity) || 75;
 
-    if (o.glyphCount > 0) {
+    if (glyphCount > 0) {
       items.push({
         id: genId(),
         name: "채널 가공비",
-        spec: `평균 ${Math.round(o.channelAvgSizeMm || 0)}각 · ${o.glyphCount}자`,
+        spec: `${channelSize}각 기준 · 실측 ${measuredChannelSize}각 · ${glyphCount}자`,
         unit: "개",
         unitPrice: Math.round(o.channelUnitPrice || 0),
-        qty: o.glyphCount,
-        marginOverride: null,
-      });
-      items.push({
-        id: genId(),
-        name: "갈바 원자재비",
-        spec: "채널 가공비에 포함되지 않은 별도 원자재 필요 시 단가 입력",
-        unit: "개",
-        unitPrice: Math.round(o.galvaUnitPrice || 0),
-        qty: o.glyphCount,
-        marginOverride: null,
-      });
-      items.push({
-        id: genId(),
-        name: "조립비",
-        spec: `채널·아크릴·LED 조립 · ${o.glyphCount}자`,
-        unit: "개",
-        unitPrice: Math.round(o.generalAssemblyUnitPrice || 0),
-        qty: o.glyphCount,
-        marginOverride: null,
-      });
-    }
-
-    if (o.totalAreaSqM > 0) {
-      items.push({
-        id: genId(),
-        name: "아크릴 판넬",
-        spec: `총 면적 ${o.totalAreaSqM.toFixed(2)}㎡`,
-        unit: "㎡",
-        unitPrice: Math.round(o.acrylicUnitPricePerSqM || 0),
-        qty: Math.round(o.totalAreaSqM * 100) / 100,
+        qty: glyphCount,
         marginOverride: null,
       });
     }
 
     if (o.moduleCount > 0) {
+      const moduleSpec = `${o.ledType || "3구 1W"} · ${moduleSize}각 × ${glyphCount}자 · 밀도 ${moduleDensity}개/㎡`;
       items.push({
         id: genId(),
         name: `LED 모듈`,
-        spec: `${o.ledType || "3구 1W"} · 외곽길이 기준`,
+        spec: moduleSpec,
         unit: "개",
         unitPrice: Math.round(o.moduleUnitPrice || 0),
         qty: o.moduleCount,
@@ -147,7 +160,7 @@
       items.push({
         id: genId(),
         name: "LED 조립비",
-        spec: "조립비 · 실리콘작업",
+        spec: `LED 모듈 ${o.moduleCount}개 기준`,
         unit: "개",
         unitPrice: Math.round(o.assemblyUnitPrice || 0),
         qty: o.moduleCount,
@@ -159,7 +172,7 @@
       items.push({
         id: genId(),
         name: "SMPS",
-        spec: `${o.smpsCap}개용 × ${o.smpsQty}`,
+        spec: `${o.smpsCap}개용 × ${o.smpsQty} · LED ${o.moduleCount || 0}개 기준`,
         unit: "개",
         unitPrice: Math.round(o.smpsUnitPrice || 0),
         qty: o.smpsQty,

@@ -1683,7 +1683,19 @@ function DrawingAnalyzer(props) {
   const glyphShapes = useMemo(() => window.VectorGeometry.groupIntoGlyphs(scaledShapes), [scaledShapes]);
   const analysis = useMemo(() => window.VectorGeometry.aggregateShapes(glyphShapes), [glyphShapes]);
   // 평균 글자 높이 — Character.height(글자 하나의 실제 세로 치수) 기준. Path/Segment는 쓰지 않는다.
-  const avgSizeMm = useMemo(() => (analysis.count ? analysis.shapes.reduce((s, sh) => s + sh.height, 0) / analysis.count : 0), [analysis]);
+  const avgSizeMm = useMemo(() => {
+    if (!analysis.count) return 0;
+    const charAvg = analysis.shapes.reduce((s, sh) => s + sh.height, 0) / analysis.count;
+    const charMax = analysis.shapes.reduce((m, sh) => Math.max(m, sh.height || 0), 0);
+    const pageH = scaledPageSize.heightMM || 0;
+    const pageFitsLetters = pageH > 0
+      && charAvg > 0
+      && pageH >= charAvg
+      && pageH <= charAvg * 1.15
+      && (!analysis.bbox.height || pageH <= analysis.bbox.height * 1.15);
+    if (pageFitsLetters) return pageH;
+    return Math.max(charAvg, charMax);
+  }, [analysis, scaledPageSize.heightMM]);
   // 글자 한 자씩 순서대로(좌→우) 치수를 확인할 수 있도록 정렬된 목록 — 원래 인덱스(_idx)는 캔버스
   // 선택(selectedIndex)과 그대로 연동된다.
   const orderedGlyphs = useMemo(() => analysis.shapes
@@ -1710,11 +1722,14 @@ function DrawingAnalyzer(props) {
     glyphCount: analysis.count,
     totalAreaSqM: analysis.totalArea / 1e6,
     channelAvgSizeMm: avgSizeMm,
+    channelPriceSizeMm: unitPrices.channelPriceSizeMm,
     channelUnitPrice: unitPrices.channelUnitPrice,
     galvaUnitPrice: unitPrices.galvaUnitPrice,
     generalAssemblyUnitPrice: unitPrices.generalAssemblyUnitPrice,
     acrylicUnitPricePerSqM: unitPrices.acrylicUnitPricePerSqM,
     moduleCount: production.moduleCount,
+    moduleDensity: production.moduleDensity,
+    moduleBaseSizeMm: production.moduleBaseSizeMm,
     moduleUnitPrice: unitPrices.moduleUnitPrice,
     ledType: production.ledType,
     assemblyUnitPrice: unitPrices.assemblyUnitPrice,
