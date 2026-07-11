@@ -64,7 +64,7 @@ ipcMain.handle("get-storage-dir", async () => {
 });
 
 ipcMain.handle("open-signplus-community", async () => {
-  await shell.openExternal("https://infopool.signplus.myds.me/");
+  await shell.openExternal("https://ganpanin.signplus.myds.me/index.html");
   return { ok: true };
 });
 
