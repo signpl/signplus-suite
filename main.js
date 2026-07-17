@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const ExcelJS = require("exceljs");
@@ -63,8 +63,13 @@ ipcMain.handle("get-storage-dir", async () => {
   }
 });
 
-ipcMain.handle("open-signplus-community", async () => {
-  await shell.openExternal("https://ganpanin.signplus.myds.me/index.html");
+ipcMain.handle("open-signplus-community", async (_event, url) => {
+  const allowed = [
+    "https://ganpanin.signplus.myds.me/index.html",
+    "https://ganpanin.kr/board.html?board=recommend",
+    "https://ganpanin.kr/board.html?board=group-buy",
+  ];
+  await shell.openExternal(allowed.includes(url) ? url : allowed[0]);
   return { ok: true };
 });
 
@@ -489,9 +494,12 @@ ipcMain.handle("drawing-export-dxf", async (_e, shapes, heightMM, filename) => {
 /*  창 생성                                                             */
 /* ------------------------------------------------------------------ */
 function createWindow() {
+  const workArea = screen.getPrimaryDisplay().workArea;
   const win = new BrowserWindow({
     width: 1360,
-    height: 860,
+    height: workArea.height,
+    x: Math.max(workArea.x, workArea.x + Math.round((workArea.width - 1360) / 2)),
+    y: workArea.y,
     minWidth: 1040,
     minHeight: 680,
     backgroundColor: "#F5F5F7",

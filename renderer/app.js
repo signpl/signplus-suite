@@ -154,6 +154,7 @@ async function loadKey(key, fallback) {
 async function saveKey(key, value) {
   try {
     await window.storage.set(key, JSON.stringify(value));
+    window.dispatchEvent(new CustomEvent("sp-storage-changed", { detail: { key } }));
     return true;
   } catch {
     return false;
@@ -227,7 +228,7 @@ const Ico = {
 /*  공용 UI                                                              */
 /* ==================================================================== */
 function Card(t, props, children) {
-  return h("div", { style: { background: t.surface, borderRadius: DS.radius.lg, border: `1px solid ${t.divider}`, padding: DS.spacing.xxl, ...(props && props.style) } }, children);
+  return h("div", { onClick: props && props.onClick, style: { background: t.surface, borderRadius: DS.radius.lg, border: `1px solid ${t.divider}`, padding: DS.spacing.xxl, ...(props && props.style) } }, children);
 }
 // 페이지 헤더 — KPI 카드와 동일한 액센트 바 + 글로우 모티프로 통일 (시그니처/호출부 동일)
 function SectionTitle(t, title, sub, right) {
@@ -258,6 +259,15 @@ function SectionTitle(t, title, sub, right) {
     right && h("div", { key: 2, style: { position: "relative" } }, right),
   ]);
 }
+
+const CUSTOMER_DEFAULTS = { customerType: "company", companyName: "", customerName: "", businessNumber: "", representative: "", phone: "", email: "", address: "", siteAddress: "", memo: "", status: "active", createdAt: "", updatedAt: "" };
+const paymentDefaults = (record, amount) => {
+  const contractAmount = Number(record && record.contractAmount != null ? record.contractAmount : amount) || 0;
+  const paidAmount = Math.max(0, Number(record && record.paidAmount) || 0);
+  const balanceAmount = Math.max(contractAmount - paidAmount, 0);
+  const paymentStatus = balanceAmount <= 0 && contractAmount > 0 ? "완납" : paidAmount > 0 ? "일부 입금" : "미입금";
+  return { contractAmount, paidAmount, balanceAmount, paymentStatus, paymentMemo: (record && record.paymentMemo) || "", paymentDate: (record && record.paymentDate) || "", payments: Array.isArray(record && record.payments) ? record.payments : [] };
+};
 function PageHeaderCard(t, title, sub, right) {
   return h("div", {
     style: {
@@ -300,15 +310,16 @@ function CommunityPremiumSection(props) {
     }, [
       h("button", {
         key: "community-brand",
-        onClick: openCommunity,
+        onClick: () => openCommunity("https://ganpanin.kr/index.html"),
         style: {
           border: "none",
           borderRadius: DS.radius.lg,
           background: `linear-gradient(135deg, ${t.accentSoft} 0%, ${t.surface2} 58%, ${t.bg} 100%)`,
           padding: `${DS.spacing.xl}px ${DS.spacing.xl}px`,
           display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "flex-start",
           gap: 6,
           textAlign: "left",
           cursor: "pointer",
@@ -316,13 +327,17 @@ function CommunityPremiumSection(props) {
           boxShadow: DS.shadow.sm,
         },
       }, [
-        h("div", { key: "title", style: { fontSize: DS.font.size.xxl, fontWeight: DS.font.weight.heavy, color: t.ink, letterSpacing: -0.4 } }, "간판인 광장"),
-        h("div", { key: "by", style: { fontSize: DS.font.size.md, fontWeight: DS.font.weight.bold, color: t.accent } }, "by Signplus"),
-        h("div", { key: "desc", style: { marginTop: 2, fontSize: DS.font.size.sm, color: t.muted, lineHeight: 1.55 } }, "대한민국 간판인들의 정보공유 플랫폼"),
+        h("img", { key: "community-logo", src: "renderer/community-logo.png", alt: "간판인 광장 로고", style: { width: 72, height: 72, borderRadius: 14, objectFit: "contain", background: "#111827", flexShrink: 0, boxShadow: DS.shadow.sm } }),
+        h("div", { key: "community-copy", style: { display: "flex", flexDirection: "column", gap: 4, minWidth: 0 } }, [
+          h("div", { key: "kicker", style: { alignSelf: "flex-start", padding: "4px 10px", borderRadius: DS.radius.pill, background: t.blueSoft, color: t.blue, fontSize: DS.font.size.xs, fontWeight: DS.font.weight.bold } }, "대한민국 간판인의 No.1 커뮤니티"),
+          h("div", { key: "title", style: { fontSize: 21, fontWeight: DS.font.weight.heavy, color: t.ink, letterSpacing: -0.5, lineHeight: 1.2 } }, "간판인의 성장과 연결의 중심"),
+          h("div", { key: "welcome", style: { fontSize: DS.font.size.md, fontWeight: DS.font.weight.bold, color: t.blue, lineHeight: 1.25 } }, "간판인 광장에 오신 것을 환영합니다!"),
+          h("div", { key: "desc", style: { marginTop: 2, fontSize: DS.font.size.xs, color: t.muted, lineHeight: 1.45 } }, "정보를 나누고, 함께 성장하며, 더 큰 가치를 만들어가는 공간 · by Signplus"),
+        ]),
       ]),
       h("button", {
         key: "community-vendor",
-        onClick: openCommunity,
+        onClick: () => openCommunity("https://ganpanin.kr/board.html?board=recommend"),
         style: {
           border: `1px solid ${t.divider}`,
           borderRadius: DS.radius.lg,
@@ -360,7 +375,7 @@ function CommunityPremiumSection(props) {
       ]),
       h("button", {
         key: "community-groupbuy",
-        onClick: openCommunity,
+        onClick: () => openCommunity("https://ganpanin.kr/board.html?board=group-buy"),
         style: {
           border: `1px solid ${t.divider}`,
           borderRadius: DS.radius.lg,
@@ -892,6 +907,7 @@ function QuoteCalculator(props) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [quoteStatus, setQuoteStatus] = useState("상담중"); // 견적/프로젝트/KPI 공용 상태(STATUSES) 사용 — 상담중/견적발송/계약/시공중/완료
   const [editingId, setEditingId] = useState(null);
+  const [customerId, setCustomerId] = useState("");
   const [selectedVendor, setSelectedVendor] = useState("jeil"); // 거래처 ID
   const [vendorPresets, setVendorPresets] = useState([]); // 현재 선택 거래처 단가
 
@@ -943,17 +959,20 @@ function QuoteCalculator(props) {
   const clearStamp = async () => { await props.onSaveCompany({ ...company, stamp: "" }); };
 
   const handleSave = async () => {
-    const rec = { id: editingId || uid(), quoteNo, client, projectName, quoteDate, validity, note, items, marginRate, subtotal, vat, total, baseSubtotal, marginAmount, status: quoteStatus, vendorId: selectedVendor, projectId: null, savedAt: new Date().toISOString() };
+    const existing = editingId ? saved.find((r) => r.id === editingId) : null;
+    const rec = { ...(existing || {}), id: editingId || uid(), quoteNo, client, projectName, quoteDate, validity, note, items, marginRate, subtotal, vat, total, baseSubtotal, marginAmount, status: quoteStatus, vendorId: selectedVendor, projectId: existing ? existing.projectId || null : null, customerId: customerId || (existing && existing.customerId) || null, ...paymentDefaults({ ...(existing || {}), contractAmount: total, ...(quoteStatus === "완료" ? { paidAmount: total, paymentStatus: "완납" } : {}) }, total), savedAt: new Date().toISOString() };
     const next = editingId ? saved.map((r) => (r.id === editingId ? rec : r)) : [rec, ...saved].slice(0, 200);
     await saveKey("sp2-quotes", next); setSaved(next); flash("견적 저장 완료");
     if (!editingId) { setEditingId(rec.id); setQuoteNo(genQuoteNo(next)); }
     await syncLinkedProjectStatus(rec); // 이 견적에 연결된 프로젝트가 있으면 상태를 즉시 동기화
   };
   const handleLoad = (r) => {
-    setClient(r.client || { name: r.clientName || "", manager: "", tel: "" });
+    const linkedCustomer = (props.customers || []).find((c) => c.id === r.customerId);
+    setClient(linkedCustomer ? { ...r.client, name: linkedCustomer.companyName || linkedCustomer.customerName || r.client?.name || "", manager: linkedCustomer.customerName || r.client?.manager || "", tel: linkedCustomer.phone || r.client?.tel || "" } : (r.client || { name: r.clientName || "", manager: "", tel: "" }));
     setProjectName(r.projectName); setQuoteNo(r.quoteNo || genQuoteNo(saved)); setQuoteDate(r.quoteDate || todayISO());
     setValidity(r.validity || ""); setNote(r.note || ""); setItems(r.items); setMarginRate(Number(r.marginRate) || 0);
     setQuoteStatus(normalizeStatus(r.status)); setSelectedVendor(r.vendorId || "jeil"); setEditingId(r.id); flash("불러왔습니다");
+    setCustomerId(r.customerId || "");
   };
   const handleDelete = async (id) => { const next = saved.filter((r) => r.id !== id); await saveKey("sp2-quotes", next); setSaved(next); if (editingId === id) setEditingId(null); };
 
@@ -1034,7 +1053,7 @@ function QuoteCalculator(props) {
       }, [
         h("button", {
           key: "community-brand",
-          onClick: openCommunity,
+          onClick: () => openCommunity("https://ganpanin.kr/index.html"),
           style: {
             border: "none",
             borderRadius: DS.radius.lg,
@@ -1056,7 +1075,7 @@ function QuoteCalculator(props) {
         ]),
         h("button", {
           key: "community-vendor",
-          onClick: openCommunity,
+          onClick: () => openCommunity("https://ganpanin.kr/board.html?board=recommend"),
           style: {
             border: `1px solid ${t.divider}`,
             borderRadius: DS.radius.lg,
@@ -1094,7 +1113,7 @@ function QuoteCalculator(props) {
         ]),
         h("button", {
           key: "community-groupbuy",
-          onClick: openCommunity,
+          onClick: () => openCommunity("https://ganpanin.kr/board.html?board=group-buy"),
           style: {
             border: `1px solid ${t.divider}`,
             borderRadius: DS.radius.lg,
@@ -1224,7 +1243,8 @@ function QuoteCalculator(props) {
         ]),
         // 우: 수신처
         h("div", { key: 2 }, [
-          h("div", { key: 0, style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.accent, marginBottom: DS.spacing.lg, letterSpacing: 1, textTransform: "uppercase" } }, "수신처 (고객)"),
+      h("div", { key: 0, style: { fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.accent, marginBottom: DS.spacing.lg, letterSpacing: 1, textTransform: "uppercase" } }, "수신처 (고객)"),
+          props.customers && props.customers.length > 0 && Field(t, "고객 연결", Sel(t, { value: customerId, onChange: (e) => { const id = e.target.value; setCustomerId(id); const c = (props.customers || []).find((x) => x.id === id); if (c) setClient((prev) => ({ ...prev, name: c.companyName || c.customerName || prev.name, manager: c.customerName || prev.manager, tel: c.phone || prev.tel })); } }, [{ value: "", label: "연결하지 않음" }, ...props.customers.map((c) => ({ value: c.id, label: c.companyName || c.customerName || "이름 없음" }))])),
           h("div", { key: 1, style: { display: "grid", gridTemplateColumns: "1fr", gap: DS.spacing.lg } }, [
             Field(t, "상호 / 수신처", TextInput(t, { value: client.name, onChange: setC("name"), placeholder: "㈜○○기업" })),
             h("div", { key: 2, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.lg } }, [
@@ -1402,6 +1422,83 @@ function QuoteCalculator(props) {
           })),
       ];
     })()),
+  ]);
+}
+
+function ArrearsPanel({ theme, quotes, onOpenQuote }) {
+  const t = theme;
+  const rows = (quotes || []).map((q) => ({ q, payment: paymentDefaults({ ...q, contractAmount: q.total }, q.total) }))
+    .filter(({ q, payment }) => ["계약", "완료"].includes(normalizeStatus(q.status)) && payment.balanceAmount > 0);
+  if (!rows.length) return null;
+  return Card(t, { style: { padding: DS.spacing.lg, marginBottom: DS.spacing.md, background: `${t.red}08`, border: `1px solid ${t.red}55` } }, [
+    h("div", { style: { color: t.red, fontWeight: DS.font.weight.bold, marginBottom: DS.spacing.sm } }, "미수금 내역"),
+    ...rows.map(({ q, payment }) => h("button", { key: q.id, onClick: () => onOpenQuote && onOpenQuote(q.id), style: { width: "100%", display: "flex", justifyContent: "space-between", padding: DS.spacing.sm, border: "none", borderTop: `1px solid ${t.divider}`, background: "transparent", color: t.ink, cursor: "pointer", textAlign: "left" } }, [
+      h("span", {}, `${q.quoteNo || "견적"} · ${num(q.total)}원`),
+      h("strong", { style: { color: t.red } }, `미수금 ${num(payment.balanceAmount)}원`),
+    ])),
+  ]);
+}
+
+function CustomerManager(props) {
+  const t = props.theme;
+  const [customers, setCustomers] = useState(props.customers || []);
+  const [selectedId, setSelectedId] = useState(null);
+  const [formOpen, setFormOpen] = useState(true);
+  const [arrearsOpen, setArrearsOpen] = useState(false);
+  const composingRef = useRef(false);
+  const [search, setSearch] = useState("");
+  const blank = { ...CUSTOMER_DEFAULTS, customerType: "company" };
+  const [form, setForm] = useState(blank);
+  useEffect(() => setCustomers(props.customers || []), [props.customers]);
+  useEffect(() => {
+    const refresh = () => { loadKey("sp2-quotes", []).then((v) => props.onQuotes && props.onQuotes(v || [])); loadKey("sp2-projects", []).then((v) => props.onProjects && props.onProjects(v || [])); };
+    refresh();
+    window.addEventListener("sp-storage-changed", refresh);
+    return () => window.removeEventListener("sp-storage-changed", refresh);
+  }, []);
+  const persist = async (next) => { setCustomers(next); if (props.onChange) await props.onChange(next); };
+  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+  const edit = (c) => { setSelectedId(c.id); setForm({ ...blank, ...c }); setFormOpen(false); };
+  const save = async () => {
+    if (!(form.companyName || form.customerName)) return;
+    const now = new Date().toISOString();
+    const rec = { ...blank, ...form, id: selectedId || uid(), createdAt: form.createdAt || now, updatedAt: now };
+    await persist(selectedId ? customers.map((c) => c.id === selectedId ? rec : c) : [rec, ...customers]);
+    setSelectedId(rec.id); setForm(rec); setFormOpen(false);
+  };
+  const remove = async () => { if (!selectedId || !confirm("고객을 삭제할까요? 견적·프로젝트는 삭제되지 않습니다.")) return; await persist(customers.filter((c) => c.id !== selectedId)); setSelectedId(null); setForm(blank); };
+  const list = customers.filter((c) => `${c.companyName} ${c.customerName} ${c.phone} ${c.email}`.toLowerCase().includes(search.toLowerCase()));
+  const selected = selectedId ? customers.find((c) => c.id === selectedId) : null;
+  const quotes = (props.quotes || []).filter((q) => selected && q.customerId === selected.id);
+  const projects = (props.projects || []).filter((p) => selected && p.customerId === selected.id);
+  const quoteSum = quotes.reduce((s, q) => s + (Number(q.total) || 0), 0);
+  const contractSum = quotes.reduce((s, q) => s + (Number(q.total) || 0), 0) + projects.reduce((s, p) => s + paymentDefaults(p, p.amount).contractAmount, 0);
+  const paidSum = [...quotes, ...projects].reduce((s, r) => s + paymentDefaults(r, 0).paidAmount, 0);
+  const arrearsTotal = quotes.reduce((s, q) => {
+    const p = paymentDefaults({ ...q, contractAmount: q.total }, q.total);
+    return s + (["계약", "완료"].includes(normalizeStatus(q.status)) ? p.balanceAmount : 0);
+  }, 0);
+  const updateQuoteStatus = async (quote, status) => {
+    const next = (props.quotes || []).map((q) => q.id === quote.id ? { ...q, status, ...(status === "완료" ? { paidAmount: Number(q.total) || 0, contractAmount: Number(q.total) || 0 } : {}) } : q);
+    await saveKey("sp2-quotes", next);
+    if (props.onQuotes) props.onQuotes(next);
+  };
+  const updateQuotePayment = async (quote, field, value) => {
+    const next = (props.quotes || []).map((q) => {
+      if (q.id !== quote.id) return q;
+      const payment = paymentDefaults({ ...q, [field]: field === "paidAmount" ? Math.max(0, Number(value) || 0) : value }, q.total);
+      return { ...q, [field]: field === "paidAmount" ? payment.paidAmount : value, ...payment };
+    });
+    await saveKey("sp2-quotes", next);
+    if (props.onQuotes) props.onQuotes(next);
+    await syncLinkedProjectStatus({ ...quote, status });
+  };
+  return h("div", {}, [
+    SectionTitle(t, "고객관리", "거래처와 개인고객을 관리하고 견적·프로젝트·결제 기본정보를 확인합니다.", Btn(t, { variant: "accent", onClick: () => { setSelectedId(null); setForm(blank); setFormOpen(true); } }, [Ico.plus({ size: 14 }), " 신규 고객"])),
+    h("div", { style: { display: "grid", gridTemplateColumns: "minmax(240px, 0.8fr) minmax(420px, 1.6fr)", gap: DS.spacing.xl } }, [
+      Card(t, {}, [TextInput(t, { value: search, onChange: (e) => setSearch(e.target.value), placeholder: "고객명·연락처·이메일 검색" }), h("div", { style: { marginTop: DS.spacing.md } }, list.map((c) => h("button", { key: c.id, onClick: () => edit(c), style: { width: "100%", textAlign: "left", border: "none", borderBottom: `1px solid ${t.divider}`, background: selectedId === c.id ? t.accentSoft : "transparent", padding: DS.spacing.md, cursor: "pointer", color: t.ink } }, `${c.companyName || c.customerName || "이름 없음"} · ${c.customerType === "person" ? "개인고객" : "거래처"}`))) ]),
+      Card(t, {}, [!formOpen && selected && Btn(t, { variant: "ghost", onClick: () => setFormOpen(true) }, "정보 수정"), formOpen && h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.md } }, [Field(t, "구분", Sel(t, { value: form.customerType, onChange: set("customerType") }, [{ value: "company", label: "거래처" }, { value: "person", label: "개인고객" }])), Field(t, "상태", Sel(t, { value: form.status, onChange: set("status") }, [{ value: "active", label: "활성" }, { value: "inactive", label: "비활성" }])), Field(t, "상호", TextInput(t, { value: form.companyName, onChange: set("companyName") })), Field(t, "고객명", TextInput(t, { value: form.customerName, onChange: set("customerName") })), Field(t, "사업자번호", TextInput(t, { value: form.businessNumber, onChange: set("businessNumber") })), Field(t, "대표자", TextInput(t, { value: form.representative, onChange: set("representative") })), Field(t, "연락처", TextInput(t, { value: form.phone, onChange: set("phone") })), Field(t, "이메일", TextInput(t, { value: form.email, onChange: set("email") })), Field(t, "주소", TextInput(t, { value: form.address, onChange: set("address") })), Field(t, "현장주소", TextInput(t, { value: form.siteAddress, onChange: set("siteAddress") })), Field(t, "메모", TextInput(t, { value: form.memo, onChange: set("memo") })) ]), formOpen && h("div", { style: { display: "flex", gap: DS.spacing.md, marginTop: DS.spacing.lg } }, [Btn(t, { variant: "accent", onClick: save }, "저장"), selectedId && Btn(t, { variant: "ghost", onClick: remove }, "삭제")]), selected && h("div", { style: { marginTop: DS.spacing.xl, color: t.muted } }, [h("div", {}, `견적 ${quotes.length}건 · 프로젝트 ${projects.length}건`), h("div", {}, `견적 합계 ${num(quoteSum)}원 · 계약금액 ${num(contractSum)}원 · 입금액 ${num(paidSum)}원 · 미수금 ${num(Math.max(contractSum - paidSum, 0))}원`), h("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: DS.spacing.md, marginTop: DS.spacing.lg, marginBottom: DS.spacing.lg } }, [ Card(t, { style: { padding: DS.spacing.lg, background: t.surface2 } }, [ h("div", { style: { color: t.muted, fontSize: DS.font.size.xs } }, "총 견적금액"), h("div", { style: { color: t.ink, fontSize: 24, fontWeight: DS.font.weight.heavy, letterSpacing: -0.5, marginTop: DS.spacing.xs } }, `${num(quoteSum)}원`) ]), Card(t, { style: { padding: DS.spacing.lg, background: t.surface2 } }, [ h("div", { style: { color: t.muted, fontSize: DS.font.size.xs } }, "입금액"), h("div", { style: { color: t.green || t.accent, fontSize: 24, fontWeight: DS.font.weight.heavy, letterSpacing: -0.5, marginTop: DS.spacing.xs } }, `${num(paidSum)}원`) ]), Card(t, { style: { padding: DS.spacing.lg, background: t.surface2 } }, [ h("div", { style: { color: t.muted, fontSize: DS.font.size.xs } }, "미수금"), h("div", { style: { color: Math.max(contractSum - paidSum, 0) > 0 ? t.red : t.green || t.accent, fontSize: 24, fontWeight: DS.font.weight.heavy, letterSpacing: -0.5, marginTop: DS.spacing.xs } }, `${num(Math.max(contractSum - paidSum, 0))}원`) ]) ]), arrearsTotal > 0 && h("button", { onClick: () => setArrearsOpen((v) => !v), style: { width: "100%", border: `1px solid ${t.red}55`, borderRadius: DS.radius.md, padding: DS.spacing.md, background: `${t.red}08`, color: t.red, fontWeight: DS.font.weight.bold, textAlign: "left", cursor: "pointer", marginBottom: DS.spacing.md } }, `${arrearsOpen ? "▼" : "▶"} 미수금 ${num(arrearsTotal)}원 · ${arrearsOpen ? "내역 닫기" : "내역 보기"}`), arrearsOpen && h(ArrearsPanel, { theme: t, quotes, onOpenQuote: props.onOpenQuote }), h("div", { style: { marginTop: DS.spacing.md, display: "flex", flexDirection: "column", gap: DS.spacing.sm } }, quotes.map((q) => { const p = ["계약", "완료"].includes(normalizeStatus(q.status)) ? paymentDefaults({ ...q, contractAmount: q.total }, q.total) : { ...paymentDefaults({ ...q, contractAmount: q.total }, q.total), paymentStatus: "미입금" }; return h("div", { key: q.id, style: { borderTop: `1px solid ${t.divider}`, paddingTop: DS.spacing.sm } }, [h("button", { onClick: () => props.onOpenQuote(q.id), style: { border: "none", background: "transparent", color: t.accent, cursor: "pointer", padding: "4px 0" } }, `${q.quoteNo || "견적"} · ${normalizeStatus(q.status)} · ${num(q.total)}원 · ${p.paymentStatus}`), Field(t, "진행상태", Sel(t, { value: normalizeStatus(q.status), onChange: (e) => updateQuoteStatus(q, e.target.value), style: { width: 220, maxWidth: 220 } }, STATUSES.map((status) => ({ value: status, label: ({ "상담중": "📝 상담중", "견적발송": "📋 견적발송", "계약": "🤝 계약", "시공중": "🔨 시공중", "완료": "✅ 완료" }[status] || status) })))), h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: DS.spacing.sm } }, [Field(t, "입금액", TextInput(t, { type: "number", value: p.paidAmount, style: { fontSize: 20, fontWeight: DS.font.weight.bold, textAlign: "right" }, onChange: (e) => updateQuotePayment(q, "paidAmount", e.target.value) })), Field(t, "결제일", TextInput(t, { type: "date", value: p.paymentDate, onChange: (e) => updateQuotePayment(q, "paymentDate", e.target.value) })), Field(t, "결제 메모", TextInput(t, { defaultValue: p.paymentMemo, onBlur: (e) => updateQuotePayment(q, "paymentMemo", e.target.value) })) ])]); }))]) ])
+    ])
   ]);
 }
 
@@ -2415,7 +2512,7 @@ function DatabaseManager(props) {
   const [toast, setToast] = useState("");
   const [catFilter, setCatFilter] = useState("전체");
   const [search, setSearch] = useState("");
-  const presetLabel = props.presetLabel || "제일에코";
+  const presetLabel = props.presetLabel || "기본";
   const [editingLabel, setEditingLabel] = useState(false);
   const [labelDraft, setLabelDraft] = useState(presetLabel);
   const [activeVendor, setActiveVendor] = useState("jeil"); // 현재 편집 중인 거래처
@@ -2684,6 +2781,7 @@ function ProjectDashboard(props) {
   const [sortBy, setSortBy] = useState("latest");
   const [hideCompleted, setHideCompleted] = useState(false);
   const [expandedIds, setExpandedIds] = useState({});
+  const [customerId, setCustomerId] = useState("");
 
   useEffect(() => {
     loadKey("sp2-projects", []).then((v) => { setProjects(v); setLoaded(true); });
@@ -2757,17 +2855,20 @@ function ProjectDashboard(props) {
       persist(projects.map((p) => (p.id === editingProjectId ? { ...p, ...form, amount: Number(form.amount) || 0 } : p)));
       setEditingProjectId(null);
     } else {
-      const proj = { id: uid(), ...form, amount: Number(form.amount) || 0, status: "상담중", createdAt: todayISO(), quoteId: selectedQuoteId || null, favorite: false };
+      const amount = Number(form.amount) || 0;
+      const proj = { id: uid(), ...form, amount, status: "상담중", createdAt: todayISO(), quoteId: selectedQuoteId || null, customerId: customerId || null, ...paymentDefaults(null, amount), favorite: false };
       persist([proj, ...projects]);
       if (selectedQuoteId) linkQuoteToProject(selectedQuoteId, proj.id);
     }
     setForm(emptyProjectForm);
     setSelectedQuoteId("");
+    setCustomerId("");
   };
   const cancelEditProject = () => { setEditingProjectId(null); setForm(emptyProjectForm); setSelectedQuoteId(""); };
   const startEditProject = (p) => {
     setEditingProjectId(p.id);
     setForm({ client: p.client || "", name: p.name || "", amount: p.amount != null ? p.amount : "", deadline: p.deadline || "", memo: p.memo || "", priority: p.priority || "보통", colorTag: p.colorTag || "" });
+    setCustomerId(p.customerId || "");
   };
   const duplicateProject = (p) => persist([{ ...p, id: uid(), createdAt: todayISO(), favorite: false }, ...projects]);
   const toggleFavorite = (id) => persist(projects.map((p) => (p.id === id ? { ...p, favorite: !p.favorite } : p)));
@@ -2789,13 +2890,14 @@ function ProjectDashboard(props) {
       if (qMonth === nowMonth) {
         thisMonthQuotes++;
         thisMonthBase += q.baseSubtotal || 0;
-        thisMonthSell += q.subtotal || 0;
+        thisMonthSell += Number(q.total) || Number(q.subtotal) || 0;
         thisMonthMargin += q.marginAmount || (q.subtotal - q.baseSubtotal) || 0;
       }
     }
   });
   const totalBaseCost = activeQuotes.reduce((s, q) => s + (q.baseSubtotal || 0), 0);
-  const totalSellAmount = activeQuotes.reduce((s, q) => s + (q.subtotal || 0), 0);
+  // 고객관리·결제 화면과 동일하게 부가세 포함 견적 총액을 사용한다.
+  const totalSellAmount = activeQuotes.reduce((s, q) => s + (Number(q.total) || Number(q.subtotal) || 0), 0);
   const totalMargin = totalSellAmount - totalBaseCost;
   const avgMarginRate = totalBaseCost > 0 ? Math.round((totalMargin / totalBaseCost) * 100) : 0;
 
@@ -2805,16 +2907,17 @@ function ProjectDashboard(props) {
 
   // 기존 프로젝트 통계 — 상태·금액 모두 연결된 견적을 단일 기준으로 삼는다(effectiveProjectStatus/Amount)
   const contracted = projects.filter((p) => ["계약", "시공중", "완료"].includes(effectiveProjectStatus(p, quotes)));
-  const totalPipeline = projects.reduce((s, p) => s + effectiveProjectAmount(p, quotes), 0);
-  const contractedSum = contracted.reduce((s, p) => s + effectiveProjectAmount(p, quotes), 0);
-  const doneSum = projects.filter((p) => effectiveProjectStatus(p, quotes) === "완료").reduce((s, p) => s + effectiveProjectAmount(p, quotes), 0);
-  const winRate = projects.length ? Math.round((contracted.length / projects.length) * 100) : 0;
+  const totalPipeline = activeQuotes.reduce((s, q) => s + (Number(q.total) || Number(q.subtotal) || 0), 0);
+  const contractedSum = activeQuotes.filter((q) => ["계약", "시공중", "완료"].includes(normalizeStatus(q && q.status))).reduce((s, q) => s + (Number(q.total) || Number(q.subtotal) || 0), 0);
+  const doneSum = activeQuotes.filter((q) => normalizeStatus(q && q.status) === "완료").reduce((s, q) => s + (Number(q.total) || Number(q.subtotal) || 0), 0);
+  const quoteContractedCount = activeQuotes.filter((q) => ["계약", "시공중", "완료"].includes(normalizeStatus(q && q.status))).length;
+  const winRate = activeQuotes.length ? Math.round((quoteContractedCount / activeQuotes.length) * 100) : 0;
 
   // 월별 견적 매출 (최근 6개월, 견적 데이터 기준)
   const now = new Date();
   const months = [];
   for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: `${d.getMonth() + 1}월` }); }
-  const monthData = months.map((m) => ({ label: m.label, value: activeQuotes.filter((q) => (q.savedAt || "").slice(0, 7) === m.key).reduce((s, q) => s + (q.subtotal || q.total || 0), 0) }));
+  const monthData = months.map((m) => ({ label: m.label, value: activeQuotes.filter((q) => (q.savedAt || "").slice(0, 7) === m.key).reduce((s, q) => s + (Number(q.total) || Number(q.subtotal) || 0), 0) }));
   const monthCostData = months.map((m) => ({ label: m.label, value: activeQuotes.filter((q) => (q.savedAt || "").slice(0, 7) === m.key).reduce((s, q) => s + (q.baseSubtotal || 0), 0) }));
 
   // 색상 매핑은 모듈 상단 STATUS_COLOR_KEY(공용)에서 파생 — 상태별 색상 정의를 여기서 다시 두지 않는다.
@@ -3221,6 +3324,7 @@ const NAV = [
   { id: "drawing", label: "AI 도면 분석", icon: Ico.image },
   { id: "dashboard", label: "프로젝트 대시보드", icon: Ico.grid },
   { id: "db", label: "거래처 · 단가", icon: Ico.book },
+  { id: "customers", label: "고객관리", icon: Ico.users || Ico.book },
 ];
 
 // 사이드바 ⚙ 관리자 메뉴 — id는 SettingsPage의 SETTINGS_SECTIONS id와 그대로 맞춰
@@ -3287,7 +3391,7 @@ function LicenseGate(props) {
   return h("div", { style: { height: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT } },
     h("div", { style: { position: "relative", width: 420, background: t.surface, border: `1px solid ${t.divider}`, borderTop: `3px solid ${t.accent}`, borderRadius: `${DS.radius.lg + DS.spacing.xs}px`, boxShadow: DS.shadow.lg, padding: `${DS.spacing.xxxl + DS.spacing.lg}px`, textAlign: "center" } }, [
       h("div", { key: "logo", style: { display: "flex", alignItems: "center", justifyContent: "center", gap: DS.spacing.md, marginBottom: DS.spacing.md } }, [
-        h("div", { key: "mark", style: { width: 36, height: 36, borderRadius: DS.radius.md, background: t.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: DS.font.size.lg, fontWeight: DS.font.weight.heavy, boxShadow: DS.shadow.sm, flexShrink: 0 } }, "S"),
+        h("img", { key: "mark", src: "renderer/signplus-logo.png", alt: "Signplus 로고", style: { width: 46, height: 46, borderRadius: 14, objectFit: "cover", display: "block", boxShadow: "0 4px 10px rgba(11, 31, 58, 0.18)", border: "1px solid rgba(255,255,255,0.85)", flexShrink: 0 } }),
         h("div", { key: 1, style: { fontSize: DS.font.size.xxl, fontWeight: DS.font.weight.heavy, color: t.ink } }, ["Signplus", h("span", { key: 1, style: { color: t.accent } }, "+")]),
       ]),
       h("div", { key: 2, style: { fontSize: DS.font.size.base, color: t.muted, marginBottom: wasExpired ? DS.spacing.md : (DS.spacing.xxxl + DS.spacing.xs) } }, "정품 인증이 필요합니다"),
@@ -3467,11 +3571,28 @@ function AdminLicensePanel(props) {
 /*  검증·계산·IPC 로직은 새로 만들지 않는다(UI/구조 리팩터링 전용).           */
 /* ==================================================================== */
 const SETTINGS_SECTIONS = [
+  { id: "display", label: "화면 표시", icon: Ico.sun },
   { id: "company", label: "회사정보", icon: Ico.edit },
   { id: "output", label: "출력설정", icon: Ico.image },
   { id: "program", label: "프로그램설정", icon: Ico.grid },
   { id: "license", label: "라이선스", icon: Ico.check },
 ];
+
+function SettingsDisplaySection(props) {
+  const t = props.theme;
+  const options = [0.9, 1, 1.1, 1.2];
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: DS.spacing.lg } }, [
+    SectionTitle(t, "화면 표시", "전체 메뉴와 작업 화면의 크기를 조절합니다."),
+    Card(t, { style: { padding: DS.spacing.xl } }, [
+      h("div", { key: "title", style: { fontSize: DS.font.size.lg, fontWeight: DS.font.weight.bold, color: t.ink } }, "화면 크기"),
+      h("div", { key: "desc", style: { marginTop: DS.spacing.sm, color: t.muted, fontSize: DS.font.size.sm } }, "글자가 작으면 크게, 한 화면에 더 많이 보려면 작게 설정하세요."),
+      h("div", { key: "options", style: { display: "flex", gap: DS.spacing.sm, flexWrap: "wrap", marginTop: DS.spacing.lg } }, options.map((value) => {
+        const active = Math.abs((props.uiScale || 1) - value) < 0.001;
+        return h("button", { key: value, onClick: () => props.onChangeUiScale && props.onChangeUiScale(value), style: { minWidth: 78, padding: `${DS.spacing.md}px ${DS.spacing.lg}px`, borderRadius: DS.radius.md, border: `1px solid ${active ? t.accent : t.divider}`, background: active ? t.accent : t.surface2, color: active ? "#fff" : t.ink, cursor: "pointer", fontFamily: FONT, fontSize: DS.font.size.base, fontWeight: DS.font.weight.bold } }, `${Math.round(value * 100)}%`);
+      })),
+    ]),
+  ]);
+}
 
 function SettingsPage(props) {
   const t = props.theme;
@@ -3481,7 +3602,8 @@ function SettingsPage(props) {
   useEffect(() => { if (props.initialSection) setSection(props.initialSection); }, [props.initialSection]);
 
   let content;
-  if (section === "company") content = h(SettingsCompanySection, { theme: t, company: props.company, onSaveCompany: props.onSaveCompany });
+  if (section === "display") content = h(SettingsDisplaySection, { theme: t, uiScale: props.uiScale, onChangeUiScale: props.onChangeUiScale });
+  else if (section === "company") content = h(SettingsCompanySection, { theme: t, company: props.company, onSaveCompany: props.onSaveCompany });
   else if (section === "output") content = h(SettingsOutputSection, { theme: t, appTheme: props.appTheme, onChangeAppTheme: props.onChangeAppTheme });
   else if (section === "program") content = h(SettingsProgramSection, { theme: t, vendors: props.vendors });
   else if (section === "license") content = h(AdminLicensePanel, { theme: t, license: props.license, company: props.company, onActivated: props.onActivated, embedded: true });
@@ -3507,13 +3629,25 @@ function SettingsCompanySection(props) {
   const t = props.theme;
   const [c, setC] = useState(props.company);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const set = (k) => (e) => setC((p) => ({ ...p, [k]: e.target.value }));
   const logo = c.logo || null;
   const stamp = c.stamp || null;
 
   useEffect(() => { setC(props.company); }, [props.company]);
 
-  const save = () => { props.onSaveCompany(c); setSaved(true); setTimeout(() => setSaved(false), 2000); };
+  const save = async () => {
+    setSaveError("");
+    try {
+      const next = { ...c };
+      await props.onSaveCompany(next);
+      setC(next);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setSaveError("회사정보 저장에 실패했습니다. 다시 시도해주세요.");
+    }
+  };
   // 로고/직인은 텍스트 필드와 달리 선택 즉시 회사정보(sp2-company)에 저장한다(기존 UX 유지).
   const pickLogo = async () => { const d = await window.api.pickImage(); if (d) { const next = { ...c, logo: d }; setC(next); await props.onSaveCompany(next); } };
   const pickStamp = async () => { const d = await window.api.pickImage(); if (d) { const next = { ...c, stamp: d }; setC(next); await props.onSaveCompany(next); } };
@@ -3553,6 +3687,7 @@ function SettingsCompanySection(props) {
     h("div", { key: "actions", style: { display: "flex", gap: DS.spacing.md, marginTop: DS.spacing.xl, alignItems: "center" } }, [
       Btn(t, { variant: "accent", onClick: save }, "저장"),
       saved && h("span", { style: { fontSize: DS.font.size.sm, color: t.green, fontWeight: DS.font.weight.semibold } }, "저장되었습니다"),
+      saveError && h("span", { style: { fontSize: DS.font.size.sm, color: t.red, fontWeight: DS.font.weight.semibold } }, saveError),
     ]),
   ]);
 }
@@ -3636,10 +3771,14 @@ function SettingsProgramSection(props) {
 
 function App() {
   const [mode, setMode] = useState("light");
+  const [uiScale, setUiScale] = useState(1);
   const [tab, setTab] = useState("quote");
   const [presets, setPresets] = useState(MATERIAL_PRESETS);
-  const [presetLabel, setPresetLabel] = useState("제일에코");
-  const [vendors, setVendors] = useState([{ id: "jeil", name: "제일에코", isDefault: true }]);
+  const [presetLabel, setPresetLabel] = useState("기본");
+  const [vendors, setVendors] = useState([{ id: "jeil", name: "기본", isDefault: true }]);
+  const [customers, setCustomers] = useState([]);
+  const [quotes, setQuotes] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [company, setCompany] = useState(DEFAULT_COMPANY);
   const [ready, setReady] = useState(false);
   const [backupMsg, setBackupMsg] = useState("");
@@ -3652,8 +3791,8 @@ function App() {
   const sendDrawingItemsToQuote = (items) => { setPendingQuoteItems(items); setTab("quote"); };
   const openSettings = (sectionId) => { setSettingsSection(sectionId); setTab("settings"); };
 
-  const openCommunity = async () => {
-    if (window.api && window.api.openCommunity) await window.api.openCommunity();
+  const openCommunity = async (url) => {
+    if (window.api && window.api.openCommunity) await window.api.openCommunity(url);
   };
   const checkLicense = async () => {
     if (window.license && window.license.status) {
@@ -3667,6 +3806,8 @@ function App() {
   useEffect(() => {
     (async () => {
       const m = await loadKey("sp2-theme", "light");
+      const storedScale = Number(await loadKey("sp2-ui-scale", 1));
+      const initialScale = [0.9, 1, 1.1, 1.2].includes(storedScale) ? storedScale : 1;
       const pr = await loadKey("sp2-presets", MATERIAL_PRESETS);
       // DEFAULT_COMPANY로 먼저 전체 키를 채운 뒤 저장된 값을 덮어써서, 이전 버전(영문회사명/계좌정보/
       // 로고/직인 필드가 없던 시절)에 저장된 값이 남아있어도 항상 완전한 모양의 company 객체가 된다.
@@ -3678,10 +3819,18 @@ function App() {
         co = { ...co, logo: co.logo || legacyBrand.logo || "", stamp: co.stamp || legacyBrand.stamp || "" };
         await saveKey("sp2-company", co);
       }
-      const pl = await loadKey("sp2-preset-label", "제일에코");
-      const vd = await loadKey("sp2-vendors", [{ id: "jeil", name: "제일에코", isDefault: true }]);
-      setMode(m); setPresets(pr && pr.length ? pr : MATERIAL_PRESETS); setCompany(co); setPresetLabel(pl);
-      setVendors(vd && vd.length ? vd : [{ id: "jeil", name: "제일에코", isDefault: true }]);
+      const storedPl = await loadKey("sp2-preset-label", "기본");
+      const pl = storedPl === "제일에코" ? "기본" : storedPl;
+      const storedVd = await loadKey("sp2-vendors", [{ id: "jeil", name: "기본", isDefault: true }]);
+      const vd = Array.isArray(storedVd) && storedVd.length
+        ? storedVd.map((v) => v.name === "제일에코" && v.isDefault ? { ...v, name: "기본" } : v)
+        : [{ id: "jeil", name: "기본", isDefault: true }];
+      const cu = await loadKey("sp2-customers", []);
+      const qs = await loadKey("sp2-quotes", []);
+      const ps = await loadKey("sp2-projects", []);
+      setMode(m); setUiScale(initialScale); setPresets(pr && pr.length ? pr : MATERIAL_PRESETS); setCompany(co); setPresetLabel(pl);
+      setVendors(vd);
+      setCustomers(Array.isArray(cu) ? cu : []); setQuotes(Array.isArray(qs) ? qs : []); setProjects(Array.isArray(ps) ? ps : []);
       setReady(true);
       await checkLicense();
     })();
@@ -3691,9 +3840,19 @@ function App() {
   // 사이드바 아이콘 클릭 = 빠른 전환(Light→Dark→Orange→Blue 순환), 설정 페이지의 "테마" 드롭다운 =
   // 직접 선택. 둘 다 같은 mode 상태/같은 sp2-theme 키를 공유하므로 항상 즉시·동시에 전체 UI에 반영된다.
   const changeTheme = async (nm) => { setMode(nm); await saveKey("sp2-theme", nm); };
+  const changeUiScale = async (next) => {
+    const value = [0.9, 1, 1.1, 1.2].includes(Number(next)) ? Number(next) : 1;
+    setUiScale(value);
+    await saveKey("sp2-ui-scale", value);
+  };
+  const cycleUiScale = () => {
+    const options = [0.9, 1, 1.1, 1.2];
+    const index = options.indexOf(uiScale);
+    changeUiScale(options[(index + 1) % options.length]);
+  };
   const cycleTheme = () => { const idx = THEME_IDS.indexOf(mode); changeTheme(THEME_IDS[(idx + 1) % THEME_IDS.length] || "light"); };
   const changePresets = (next) => setPresets(next);
-  const changePresetLabel = async (v) => { const val = (v || "").trim() || "제일에코"; setPresetLabel(val); await saveKey("sp2-preset-label", val); };
+  const changePresetLabel = async (v) => { const val = (v || "").trim() || "기본"; setPresetLabel(val); await saveKey("sp2-preset-label", val); };
   // 항상 DEFAULT_COMPANY 전체 키를 기준으로 병합해 저장 — 로고/직인만 바꾸는 부분 업데이트
   // (QuoteCalculator의 pickLogo 등)가 다른 필드를 담고 있지 않아도 기존 값이 사라지지 않고,
   // 화면(state)과 저장소(sp2-company)가 항상 같은 모양의 객체로 동기화된다.
@@ -3701,6 +3860,7 @@ function App() {
 
   // 거래처 관리
   const saveVendors = async (next) => { setVendors(next); await saveKey("sp2-vendors", next); };
+  const saveCustomers = async (next) => { setCustomers(next); await saveKey("sp2-customers", next); };
   const addVendor = async (name) => {
     const id = "v-" + uid();
     const next = [...vendors, { id, name, isDefault: false }];
@@ -3758,19 +3918,22 @@ function App() {
   if (!ready || license === null) return h("div", { style: { height: "100vh", background: THEMES.light.bg } });
   if (!license.activated) return h(LicenseGate, { theme: THEMES.light, onActivated: checkLicense, expiredInfo: license });
 
-  return h("div", { style: { display: "flex", height: "100vh", background: t.bg, fontFamily: FONT } }, [
+  return h("div", { style: { display: "flex", height: `calc(100vh / ${uiScale})`, minHeight: 0, overflow: "hidden", background: t.bg, fontFamily: FONT, zoom: uiScale } }, [
     // 사이드바
     // 사이드바 — 프리미엄 SaaS 스타일 (기능/메뉴/이벤트 동일, DS 토큰만 사용)
     h("div", { key: "side", style: { width: 224, background: t.surface, borderRight: `1px solid ${t.divider}`, padding: `${DS.spacing.xxl}px ${DS.spacing.lg}px`, display: "flex", flexDirection: "column" } }, [
-      h("div", { key: 1, style: { padding: `${DS.spacing.xs}px ${DS.spacing.md}px ${DS.spacing.xl}px`, display: "flex", justifyContent: "space-between", alignItems: "flex-start" } }, [
+      h("div", { key: 1, style: { padding: `${DS.spacing.xs}px ${DS.spacing.md}px ${DS.spacing.sm}px`, display: "flex", justifyContent: "center", alignItems: "center" } }, [
         h("div", { key: 1, style: { display: "flex", alignItems: "center", gap: DS.spacing.md } }, [
-          h("div", { key: "mark", style: { width: 30, height: 30, borderRadius: DS.radius.md, background: t.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: DS.font.size.md, fontWeight: DS.font.weight.heavy, boxShadow: DS.shadow.sm, flexShrink: 0 } }, "S"),
+          h("img", { key: "mark", src: "renderer/signplus-logo.png", alt: "Signplus 로고", style: { width: 36, height: 36, borderRadius: 12, objectFit: "cover", display: "block", boxShadow: "0 4px 10px rgba(11, 31, 58, 0.18)", border: "1px solid rgba(255,255,255,0.85)", flexShrink: 0 } }),
           h("div", { key: "word" }, [
             h("div", { key: 1, style: { fontSize: DS.font.size.lg, fontWeight: DS.font.weight.heavy, color: t.ink, letterSpacing: -0.3 } }, ["Signplus", h("span", { key: 1, style: { color: t.accent } }, "+")]),
             h("div", { key: 2, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.xs } }, `통합 업무 툴 v${APP_VERSION}`),
           ]),
         ]),
-        h("button", { key: 2, onClick: cycleTheme, title: `테마 전환 (현재: ${THEME_LABELS[mode] || mode})`, style: { background: t.surface2, border: `1px solid ${t.divider}`, borderRadius: DS.radius.sm, width: 30, height: 30, cursor: "pointer", color: t.ink, display: "flex", alignItems: "center", justifyContent: "center" } }, mode === "light" ? Ico.moon({ size: 15 }) : Ico.sun({ size: 15 })),
+      ]),
+      h("div", { key: "display-controls", style: { display: "flex", justifyContent: "center", alignItems: "center", gap: DS.spacing.sm, padding: `0 ${DS.spacing.md}px ${DS.spacing.xl}px` } }, [
+        h("button", { key: "theme", onClick: cycleTheme, title: `테마 전환 (현재: ${THEME_LABELS[mode] || mode})`, style: { background: t.surface2, border: `1px solid ${t.divider}`, borderRadius: DS.radius.sm, width: 34, height: 30, cursor: "pointer", color: t.ink, display: "flex", alignItems: "center", justifyContent: "center" } }, mode === "light" ? Ico.moon({ size: 15 }) : Ico.sun({ size: 15 })),
+        h("button", { key: "scale", onClick: cycleUiScale, title: `글자 크기 ${Math.round(uiScale * 100)}% · 클릭하여 변경`, style: { background: t.surface2, border: `1px solid ${t.divider}`, borderRadius: DS.radius.sm, minWidth: 78, height: 30, padding: "0 7px", cursor: "pointer", color: t.ink, display: "flex", alignItems: "center", justifyContent: "center", gap: 3, fontFamily: FONT, fontSize: 10, fontWeight: DS.font.weight.bold } }, [h("span", { key: "a", style: { fontFamily: MONO, fontSize: 12 } }, "A+"), h("span", { key: "label" }, `${Math.round(uiScale * 100)}%`)]),
       ]),
       h("div", { key: 2, style: { display: "flex", flexDirection: "column", gap: DS.spacing.xs, flex: 1 } }, NAV.map((n) => {
         const active = tab === n.id;
@@ -3822,14 +3985,15 @@ function App() {
       ]),
     ]),
     // 콘텐츠
-    h("div", { key: "main", style: { flex: 1, padding: DS.spacing.xxxl + DS.spacing.xs, overflowY: "auto" } }, [
-      tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, onSaveCompany: saveCompany, presetLabel, vendors, loadVendorPresets, openQuoteId, onOpenQuoteHandled: () => setOpenQuoteId(null), pendingItems: pendingQuoteItems, onPendingItemsHandled: () => setPendingQuoteItems(null), openCommunity }),
+    h("div", { key: "main", style: { flex: 1, minWidth: 0, minHeight: 0, padding: DS.spacing.xxxl + DS.spacing.xs, overflowY: "auto", overflowX: "hidden" } }, [
+      tab === "quote" && h(QuoteCalculator, { key: "q", theme: t, presets, company, customers, onSaveCompany: saveCompany, presetLabel, vendors, loadVendorPresets, openQuoteId, onOpenQuoteHandled: () => setOpenQuoteId(null), pendingItems: pendingQuoteItems, onPendingItemsHandled: () => setPendingQuoteItems(null), openCommunity }),
       tab === "brief" && h(DesignBrief, { key: "b", theme: t, company, openCommunity }),
       tab === "led" && h(LedCalculator, { key: "l", theme: t, openCommunity }),
       tab === "drawing" && h(DrawingAnalyzer, { key: "va", theme: t, presets, onSendToQuote: sendDrawingItemsToQuote, openCommunity }),
-      tab === "dashboard" && h(ProjectDashboard, { key: "d", theme: t, onOpenQuote: openQuoteInCalculator }),
+      tab === "dashboard" && h(ProjectDashboard, { key: "d", theme: t, customers, onOpenQuote: openQuoteInCalculator }),
       tab === "db" && h(DatabaseManager, { key: "db", theme: t, presets, onPresetsChange: changePresets, presetLabel, onPresetLabelChange: changePresetLabel, vendors, onAddVendor: addVendor, onRemoveVendor: removeVendor, loadVendorPresets, saveVendorPresets }),
-      tab === "settings" && h(SettingsPage, { key: "settings", theme: t, initialSection: settingsSection, company, onSaveCompany: saveCompany, vendors, license, onActivated: checkLicense, appTheme: mode, onChangeAppTheme: changeTheme }),
+      tab === "customers" && h(CustomerManager, { key: "customers", theme: t, customers, quotes, projects, onChange: saveCustomers, onQuotes: setQuotes, onProjects: setProjects, onOpenQuote: openQuoteInCalculator }),
+      tab === "settings" && h(SettingsPage, { key: "settings", theme: t, initialSection: settingsSection, company, onSaveCompany: saveCompany, vendors, license, onActivated: checkLicense, appTheme: mode, onChangeAppTheme: changeTheme, uiScale, onChangeUiScale: changeUiScale }),
     ]),
   ]);
 }
