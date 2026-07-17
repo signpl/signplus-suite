@@ -167,8 +167,14 @@ async function saveKey(key, value) {
 /* ------------------------------------------------------------------ */
 /* 단가 기본값: 제일에코 데이터(jeil-presets.js에서 로드). 없으면 빈 배열 */
 const MATERIAL_PRESETS = (typeof JEIL_PRESETS !== "undefined" ? JEIL_PRESETS : []);
+const mergeDefaultPresets = (stored) => {
+  const base = Array.isArray(stored) && stored.length ? stored : MATERIAL_PRESETS;
+  const laserDefaults = MATERIAL_PRESETS.filter((p) => p.cat === "레이저");
+  if (!laserDefaults.length || base.some((p) => p.cat === "레이저")) return base;
+  return [...base, ...laserDefaults];
+};
 /* 단가표 카테고리 순서 — 공식 명칭은 "포마트"이다 */
-const PRESET_CATS = ["채널", "채널바", "고무스카시", "LED", "현수막", "포마트", "코팅지/원단", "합성지/PVC/베너", "시트출력", "원단출력", "프레임", "에어간판", "어닝", "시공/경비"];
+const PRESET_CATS = ["채널", "채널바", "고무스카시", "LED", "현수막", "포마트", "코팅지/원단", "합성지/PVC/베너", "시트출력", "원단출력", "프레임", "에어간판", "어닝", "시공/경비", "레이저"];
 
 // 과거 오탈자("포맥트") 하위호환 — 저장된 데이터는 건드리지 않고 화면 표시·필터링 시에만
 // 공식 명칭("포마트")으로 보정한다. 새 오탈자가 발견되면 이 맵에 한 줄만 추가하면 된다.
@@ -3808,7 +3814,9 @@ function App() {
       const m = await loadKey("sp2-theme", "light");
       const storedScale = Number(await loadKey("sp2-ui-scale", 1));
       const initialScale = [0.9, 1, 1.1, 1.2].includes(storedScale) ? storedScale : 1;
-      const pr = await loadKey("sp2-presets", MATERIAL_PRESETS);
+      const storedPr = await loadKey("sp2-presets", MATERIAL_PRESETS);
+      const pr = mergeDefaultPresets(storedPr);
+      if (pr.length !== (Array.isArray(storedPr) ? storedPr.length : 0)) await saveKey("sp2-presets", pr);
       // DEFAULT_COMPANY로 먼저 전체 키를 채운 뒤 저장된 값을 덮어써서, 이전 버전(영문회사명/계좌정보/
       // 로고/직인 필드가 없던 시절)에 저장된 값이 남아있어도 항상 완전한 모양의 company 객체가 된다.
       let co = { ...DEFAULT_COMPANY, ...(await loadKey("sp2-company", DEFAULT_COMPANY)) };
@@ -3875,8 +3883,8 @@ function App() {
   };
   const loadVendorPresets = async (vendorId) => {
     if (vendorId === "jeil") {
-      const pr = await loadKey("sp2-presets", MATERIAL_PRESETS);
-      return pr && pr.length ? pr : MATERIAL_PRESETS;
+      const pr = mergeDefaultPresets(await loadKey("sp2-presets", MATERIAL_PRESETS));
+      return pr;
     }
     return await loadKey("sp2-presets-" + vendorId, []);
   };
