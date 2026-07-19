@@ -316,7 +316,7 @@ function CommunityPremiumSection(props) {
     }, [
       h("button", {
         key: "community-brand",
-        onClick: () => openCommunity("https://ganpanin.kr/index.html"),
+        onClick: () => openCommunity("https://ganpanin.kr/"),
         style: {
           border: "none",
           borderRadius: DS.radius.lg,
@@ -468,7 +468,7 @@ function IconBtn(t, icon, onClick, color) {
 /*  않는다(briefTemplateFor 참고).                                         */
 /* ==================================================================== */
 function buildQuoteHTML(data) {
-  const { company, client, quoteNo, quoteDate, validity, items, subtotal, vat, total, logo, stamp, notes } = data;
+  const { company, client, quoteNo, quoteDate, validity, items, subtotal, vat, total, logo, stamp, notes, vatSeparate } = data;
   const template = briefTemplateFor(data.theme);
   const { font, heading, table, colors, note, layout } = template;
   const tableHeadColor = table.headerColor || colors.ink;
@@ -528,7 +528,7 @@ function buildQuoteHTML(data) {
   };
 
   const noteArr = (notes || "").split("\n").map((s) => s.replace(/^\s*\d+\.\s*/, "").trim()).filter(Boolean);
-  const notesHtml = (noteArr.length ? noteArr : ["상기 견적은 부가세 포함 금액입니다."])
+  const notesHtml = (noteArr.length ? noteArr : [vatSeparate ? "상기 견적 금액은 부가세 별도입니다." : "상기 견적은 부가세 포함 금액입니다."])
     .map((s, i) => `<div class="note-line">${i + 1}. ${esc(s)}</div>`)
     .join("");
   const notesBoxHtml = `<div class="note-box">${notesHtml}</div>`;
@@ -576,9 +576,8 @@ function buildQuoteHTML(data) {
       </tbody></table>
 
       <div class="summary">
-        <div class="row head"><span class="lbl">합계금액 (VAT 포함)</span><span class="amt">₩ ${num(total)}</span></div>
-        <div class="row"><span class="lbl">금액 (부가세 별도)</span><span class="amt">₩ ${num(subtotal)}</span></div>
-        <div class="row"><span class="lbl">부 가 세 (10%)</span><span class="amt">₩ ${num(vat)}</span></div>
+        <div class="row head"><span class="lbl">${vatSeparate ? "합계금액 (부가세 별도)" : "합계금액 (VAT 포함)"}</span><span class="amt">₩ ${num(total)}</span></div>
+        ${vatSeparate ? "" : `<div class="row"><span class="lbl">금액 (부가세 별도)</span><span class="amt">₩ ${num(subtotal)}</span></div><div class="row"><span class="lbl">부 가 세 (10%)</span><span class="amt">₩ ${num(vat)}</span></div>`}
       </div>
     </div>`;
 
@@ -588,9 +587,7 @@ function buildQuoteHTML(data) {
   const tailHtml = `
     <div class="tail-block">
     <table class="foot-tbl"><tbody>
-      <tr><td class="lbl">합 계 (VAT 별도)</td><td class="amt">${num(subtotal)}</td><td class="pad"></td></tr>
-      <tr><td class="lbl">부 가 세 (10%)</td><td class="amt">${num(vat)}</td><td></td></tr>
-      <tr class="grand"><td class="lbl">합 계 금 액 (VAT 포함)</td><td class="amt">₩ ${num(total)}</td><td></td></tr>
+      ${vatSeparate ? `<tr class="grand"><td class="lbl">합 계 금 액 (부가세 별도)</td><td class="amt">₩ ${num(subtotal)}</td><td></td></tr>` : `<tr><td class="lbl">합 계 (VAT 별도)</td><td class="amt">${num(subtotal)}</td><td class="pad"></td></tr><tr><td class="lbl">부 가 세 (10%)</td><td class="amt">${num(vat)}</td><td></td></tr><tr class="grand"><td class="lbl">합 계 금 액 (VAT 포함)</td><td class="amt">₩ ${num(total)}</td><td></td></tr>`}
     </tbody></table>
 
     <div class="bottom">
@@ -897,6 +894,7 @@ function QuoteCalculator(props) {
   const [quoteDate, setQuoteDate] = useState(todayISO());
   const [validity, setValidity] = useState("견적일로부터 30일");
   const [note, setNote] = useState("상기 견적은 부가세 포함 금액입니다.\n견적 유효기간 이후 변동될 수 있습니다.\n발주 후 제작이 진행되며, 제작 기간은 별도 협의입니다.\n기타 문의사항은 상단 연락처로 연락 부탁드립니다.");
+  const [vatSeparate, setVatSeparate] = useState(false);
   const [items, setItems] = useState([{ id: uid(), name: "", spec: "", unit: "식", unitPrice: 0, qty: 1, marginOverride: null }]);
   const logo = company.logo || null;
   const stamp = company.stamp || null;
@@ -957,7 +955,7 @@ function QuoteCalculator(props) {
   const sellPrice = (i) => window.QuoteEngine.sellPrice(i, marginRate);
   const lineTotal = (i) => window.QuoteEngine.lineTotal(i, marginRate);
   const baseLineTotal = (i) => window.QuoteEngine.baseLineTotal(i);
-  const { subtotal, vat, total, baseSubtotal, marginAmount } = window.QuoteEngine.computeTotals(items, marginRate);
+  const { subtotal, vat, total, baseSubtotal, marginAmount } = window.QuoteEngine.computeTotals(items, marginRate, vatSeparate);
 
   const pickLogo = async () => { const d = await window.api.pickImage(); if (d) { await props.onSaveCompany({ ...company, logo: d }); flash("로고 저장됨"); } };
   const pickStamp = async () => { const d = await window.api.pickImage(); if (d) { await props.onSaveCompany({ ...company, stamp: d }); flash("도장 저장됨"); } };
@@ -966,7 +964,7 @@ function QuoteCalculator(props) {
 
   const handleSave = async () => {
     const existing = editingId ? saved.find((r) => r.id === editingId) : null;
-    const rec = { ...(existing || {}), id: editingId || uid(), quoteNo, client, projectName, quoteDate, validity, note, items, marginRate, subtotal, vat, total, baseSubtotal, marginAmount, status: quoteStatus, vendorId: selectedVendor, projectId: existing ? existing.projectId || null : null, customerId: customerId || (existing && existing.customerId) || null, ...paymentDefaults({ ...(existing || {}), contractAmount: total, ...(quoteStatus === "완료" ? { paidAmount: total, paymentStatus: "완납" } : {}) }, total), savedAt: new Date().toISOString() };
+    const rec = { ...(existing || {}), id: editingId || uid(), quoteNo, client, projectName, quoteDate, validity, note, items, marginRate, vatSeparate, subtotal, vat, total, baseSubtotal, marginAmount, status: quoteStatus, vendorId: selectedVendor, projectId: existing ? existing.projectId || null : null, customerId: customerId || (existing && existing.customerId) || null, ...paymentDefaults({ ...(existing || {}), contractAmount: total, ...(quoteStatus === "완료" ? { paidAmount: total, paymentStatus: "완납" } : {}) }, total), savedAt: new Date().toISOString() };
     const next = editingId ? saved.map((r) => (r.id === editingId ? rec : r)) : [rec, ...saved].slice(0, 200);
     await saveKey("sp2-quotes", next); setSaved(next); flash("견적 저장 완료");
     if (!editingId) { setEditingId(rec.id); setQuoteNo(genQuoteNo(next)); }
@@ -977,6 +975,7 @@ function QuoteCalculator(props) {
     setClient(linkedCustomer ? { ...r.client, name: linkedCustomer.companyName || linkedCustomer.customerName || r.client?.name || "", manager: linkedCustomer.customerName || r.client?.manager || "", tel: linkedCustomer.phone || r.client?.tel || "" } : (r.client || { name: r.clientName || "", manager: "", tel: "" }));
     setProjectName(r.projectName); setQuoteNo(r.quoteNo || genQuoteNo(saved)); setQuoteDate(r.quoteDate || todayISO());
     setValidity(r.validity || ""); setNote(r.note || ""); setItems(r.items); setMarginRate(Number(r.marginRate) || 0);
+    setVatSeparate(Boolean(r.vatSeparate));
     setQuoteStatus(normalizeStatus(r.status)); setSelectedVendor(r.vendorId || "jeil"); setEditingId(r.id); flash("불러왔습니다");
     setCustomerId(r.customerId || "");
   };
@@ -1006,7 +1005,7 @@ function QuoteCalculator(props) {
   // 견적서(PDF·엑셀)에는 원가가 아닌 마진 반영된 판매단가로 출력
   const exportItems = () => items.map((i) => ({ ...i, unitPrice: sellPrice(i) }));
   const handleExcel = async () => {
-    const quote = { company, client, quoteNo, quoteDate, validity, items: exportItems(), subtotal, vat, total, notes: note, theme: quoteStyle, styleTokens: quoteExcelStyleTokens(quoteStyle) };
+    const quote = { company, client, quoteNo, quoteDate, validity, items: exportItems(), subtotal, vat, total, vatSeparate, notes: note, theme: quoteStyle, styleTokens: quoteExcelStyleTokens(quoteStyle) };
     try {
       const res = await window.api.exportExcel(quote, (client.name || projectName || "견적서") + "_" + quoteNo);
       if (res && res.ok) flash("엑셀 저장 완료");
@@ -1017,7 +1016,7 @@ function QuoteCalculator(props) {
     }
   };
   const handlePdf = async () => {
-    const html = buildQuoteHTML({ company, client, quoteNo, quoteDate, validity, items: exportItems(), subtotal, vat, total, logo, stamp, notes: note, theme: quoteStyle });
+    const html = buildQuoteHTML({ company, client, quoteNo, quoteDate, validity, items: exportItems(), subtotal, vat, total, vatSeparate, logo, stamp, notes: note, theme: quoteStyle });
     try {
       const res = await window.api.exportPdf(html, (client.name || projectName || "견적서") + "_" + quoteNo);
       if (res && res.ok) flash("PDF 저장 완료");
@@ -1059,7 +1058,7 @@ function QuoteCalculator(props) {
       }, [
         h("button", {
           key: "community-brand",
-          onClick: () => openCommunity("https://ganpanin.kr/index.html"),
+          onClick: () => openCommunity("https://ganpanin.kr/"),
           style: {
             border: "none",
             borderRadius: DS.radius.lg,
@@ -1356,6 +1355,10 @@ function QuoteCalculator(props) {
     h("div", { key: "sum", style: { display: "grid", gridTemplateColumns: "1fr 380px", gap: DS.spacing.xl } }, [
       Card(t, { key: 1, style: { borderTop: `3px solid ${t.accent}`, boxShadow: DS.shadow.sm } }, [
         Field(t, "기타 안내사항 (PDF 하단에 번호로 표시됩니다 · 줄바꿈으로 구분)", TextArea(t, { value: note, onChange: (e) => setNote(e.target.value), rows: 4 })),
+        h("label", { key: "vat-option", style: { display: "flex", alignItems: "center", gap: DS.spacing.sm, marginTop: DS.spacing.md, fontSize: DS.font.size.base, cursor: "pointer" } }, [
+          h("input", { type: "checkbox", checked: vatSeparate, onChange: (e) => setVatSeparate(e.target.checked) }),
+          "부가세 별도 (부가세 금액은 표시하지 않고 문구만 표시)",
+        ]),
         h("div", { key: 2, style: { display: "flex", gap: DS.spacing.md, marginTop: DS.spacing.lg, alignItems: "center", flexWrap: "wrap" } }, [
           Btn(t, { key: 1, variant: "ghost", onClick: pickLogo }, [Ico.image({ size: 14 }), logo ? " 로고 변경" : " 로고 등록"]),
           logo && h("span", { key: "lc", onClick: clearLogo, style: { fontSize: DS.font.size.xs, color: t.green, alignSelf: "center", cursor: "pointer" } }, "✓ 로고 (삭제)"),
@@ -1365,9 +1368,9 @@ function QuoteCalculator(props) {
         h("div", { key: 3, style: { fontSize: DS.font.size.xs, color: t.muted, marginTop: DS.spacing.md } }, "※ 공급자(회사) 정보는 좌측 하단 '회사 정보 설정'에서 관리합니다."),
       ]),
       Card(t, { key: 2, style: { background: t.inkPanel, borderTop: `3px solid ${qAccent}`, boxShadow: DS.shadow.sm } }, [
-        h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.base, color: t.inkPanelMuted, padding: `${DS.spacing.xs}px 0`, fontFamily: qFont } }, [h("span", { key: 1 }, "공급가액 (VAT 별도)"), h("span", { key: 2, style: { fontFamily: MONO } }, won(subtotal))]),
-        h("div", { key: 2, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.base, color: t.inkPanelMuted, padding: `${DS.spacing.xs}px 0`, fontFamily: qFont } }, [h("span", { key: 1 }, "부가세 (10%)"), h("span", { key: 2, style: { fontFamily: MONO } }, won(vat))]),
-        h("div", { key: 3, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.xl, fontWeight: DS.font.weight.bold, color: t.inkPanelText, paddingTop: DS.spacing.lg, marginTop: DS.spacing.sm, borderTop: `1px solid ${t.inkPanelBorder}`, fontFamily: qFont } }, [h("span", { key: 1 }, "합계 (VAT 포함)"), h("span", { key: 2, style: { fontFamily: MONO, color: qAccent } }, won(total))]),
+        h("div", { key: 1, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.base, color: t.inkPanelMuted, padding: `${DS.spacing.xs}px 0`, fontFamily: qFont } }, [h("span", { key: 1 }, vatSeparate ? "공급가액 (VAT 별도)" : "금액 (부가세 별도)"), h("span", { key: 2, style: { fontFamily: MONO } }, won(subtotal))]),
+        !vatSeparate && h("div", { key: 2, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.base, color: t.inkPanelMuted, padding: `${DS.spacing.xs}px 0`, fontFamily: qFont } }, [h("span", { key: 1 }, "부가세 (10%)"), h("span", { key: 2, style: { fontFamily: MONO } }, won(vat))]),
+        h("div", { key: 3, style: { display: "flex", justifyContent: "space-between", fontSize: DS.font.size.xl, fontWeight: DS.font.weight.bold, color: t.inkPanelText, paddingTop: DS.spacing.lg, marginTop: DS.spacing.sm, borderTop: `1px solid ${t.inkPanelBorder}`, fontFamily: qFont } }, [h("span", { key: 1 }, vatSeparate ? "합계 (부가세 별도)" : "합계 (VAT 포함)"), h("span", { key: 2, style: { fontFamily: MONO, color: qAccent } }, won(total))]),
       ]),
     ]),
     // 액션 — 저장/PDF/엑셀 버튼 로직 동일, 견적 스타일 선택 시 PDF·엑셀 버튼에도 즉시 반영
@@ -1388,7 +1391,7 @@ function QuoteCalculator(props) {
       h("div", { key: "hh", style: { padding: `${DS.spacing.md}px ${DS.spacing.xl}px`, fontSize: DS.font.size.sm, fontWeight: DS.font.weight.bold, color: t.muted, borderBottom: `1px solid ${t.divider}` } }, `견적서 미리보기 · ${quoteStyle}`),
       h("iframe", {
         key: "frame",
-        srcDoc: buildQuoteHTML({ company, client, quoteNo, quoteDate, validity, items: exportItems(), subtotal, vat, total, logo, stamp, notes: note, theme: quoteStyle }),
+        srcDoc: buildQuoteHTML({ company, client, quoteNo, quoteDate, validity, items: exportItems(), subtotal, vat, total, vatSeparate, logo, stamp, notes: note, theme: quoteStyle }),
         style: { width: "100%", height: 560, border: "none", display: "block", background: "#fff" },
       }),
     ]),

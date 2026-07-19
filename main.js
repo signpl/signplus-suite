@@ -65,7 +65,8 @@ ipcMain.handle("get-storage-dir", async () => {
 
 ipcMain.handle("open-signplus-community", async (_event, url) => {
   const allowed = [
-    "https://ganpanin.signplus.myds.me/index.html",
+    "https://ganpanin.kr/",
+    "https://ganpanin.kr/index.html",
     "https://ganpanin.kr/board.html?board=recommend",
     "https://ganpanin.kr/board.html?board=group-buy",
   ];
@@ -134,7 +135,7 @@ const EXCEL_DEFAULT_STYLE_TOKENS = { font: "맑은 고딕", title: "FF1D1D1F", h
 
 ipcMain.handle("export-excel", async (_e, quote, filename) => {
   try {
-    const { company, client, quoteNo, quoteDate, validity, items, subtotal, vat, total, notes } = quote;
+    const { company, client, quoteNo, quoteDate, validity, items, subtotal, vat, total, notes, vatSeparate } = quote;
     const ex = Object.assign({}, EXCEL_DEFAULT_STYLE_TOKENS, quote.styleTokens || {});
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("견적서", {
@@ -212,11 +213,7 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
       ws.getRow(rr).height = 20 + padBoost;
     });
     // 합계 박스 (E=라벨, F:G=금액 병합, 3행)
-    const sumBox = [
-      ["합계금액 (VAT 포함)", total, 15, true, ex.headFill, ex.headText],
-      ["금액 (부가세 별도)", subtotal, 11, false, null, null],
-      ["부 가 세 (10%)", vat, 11, false, null, null],
-    ];
+    const sumBox = vatSeparate ? [["합계금액 (부가세 별도)", subtotal, 15, true, ex.headFill, ex.headText]] : [["합계금액 (VAT 포함)", total, 15, true, ex.headFill, ex.headText], ["금액 (부가세 별도)", subtotal, 11, false, null, null], ["부 가 세 (10%)", vat, 11, false, null, null]];
     sumBox.forEach((sb, i) => {
       const rr = metaStart + i;
       ws.getCell(`E${rr}`).value = sb[0];
@@ -313,7 +310,7 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     }
 
     // 합계 (우측 정렬, E=라벨 병합, F=금액)
-    const sumRows = [["합 계 (VAT 별도)", subtotal, false], ["부 가 세 (10%)", vat, false], ["합 계 금 액 (VAT 포함)", total, true]];
+    const sumRows = vatSeparate ? [["합 계 금 액 (부가세 별도)", subtotal, true]] : [["합 계 (VAT 별도)", subtotal, false], ["부 가 세 (10%)", vat, false], ["합 계 금 액 (VAT 포함)", total, true]];
     sumRows.forEach((sr, idx) => {
       const rr = r + idx;
       ws.mergeCells(`A${rr}:E${rr}`);
@@ -337,7 +334,7 @@ ipcMain.handle("export-excel", async (_e, quote, filename) => {
     ws.getCell(`A${r}`).value = "기타 안내사항";
     ws.getCell(`A${r}`).font = F(null, 11, true);
     r++;
-    const noteLines = noteArr.length ? noteArr : ["상기 견적은 부가세 포함 금액입니다."];
+    const noteLines = noteArr.length ? noteArr : [vatSeparate ? "상기 견적 금액은 부가세 별도입니다." : "상기 견적은 부가세 포함 금액입니다."];
     noteLines.forEach((n, idx) => {
       ws.mergeCells(`A${r + idx}:E${r + idx}`);
       ws.getCell(`A${r + idx}`).value = `${idx + 1}. ${n}`;

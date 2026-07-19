@@ -31,10 +31,10 @@
   }
 
   // items 전체에 대한 원가 합계/판매 합계/부가세/마진액을 한 번에 계산
-  function computeTotals(items, marginRate) {
+  function computeTotals(items, marginRate, vatSeparate) {
     const list = items || [];
     const subtotal = list.reduce((s, i) => s + lineTotal(i, marginRate), 0);
-    const vat = Math.round(subtotal * 0.1);
+    const vat = vatSeparate ? 0 : Math.round(subtotal * 0.1);
     const total = subtotal + vat;
     const baseSubtotal = list.reduce((s, i) => s + baseLineTotal(i), 0);
     const marginAmount = subtotal - baseSubtotal;
