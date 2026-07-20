@@ -30,6 +30,21 @@
     document.querySelector('#reset-quote').addEventListener('click', () => { items.innerHTML = ''; addItem(); });
     document.querySelector('#save-quote').addEventListener('click', () => { localStorage.setItem('signplus-last-quote', JSON.stringify({ project: document.querySelector('#project').value, client: document.querySelector('#client').value, savedAt: new Date().toISOString() })); alert('견적이 브라우저에 임시 저장되었습니다.'); });
   }
-  function bindDashboard() { document.querySelector('.mobile-menu')?.addEventListener('click', () => alert('모바일 메뉴는 다음 단계에서 연결합니다.')); document.querySelector('.primary')?.addEventListener('click', renderQuote); nav.forEach((item) => item.addEventListener('click', (e) => { if (item.textContent.includes('견적 관리')) { e.preventDefault(); renderQuote(); } })); }
+  function renderProjects() {
+    setActive('프로젝트');
+    const projects = [
+      ['카페 오프화이트 외부 돌출간판', '카페 오프화이트', '견적발송', '₩ 2,450,000', '2026.07.21'],
+      ['성수동 쇼룸 채널사인', '성수동 쇼룸', '계약', '₩ 6,800,000', '2026.07.20'],
+      ['강남구청 외벽 LED 사인', '강남구청', '시공중', '₩ 12,300,000', '2026.07.16'],
+      ['라이트웍스 사옥 안내사인', '주식회사 라이트웍스', '상담중', '₩ 4,200,000', '2026.07.14'],
+      ['동탄 상가 입면 간판', '어반플레이스', '완료', '₩ 3,100,000', '2026.07.08']
+    ];
+    const colors = { 상담중: 'gray', 견적발송: 'blue', 계약: 'orange', 시공중: 'purple', 완료: 'green' };
+    content.innerHTML = `<div class="welcome"><div><p class="eyebrow">PROJECT MANAGEMENT</p><h1>프로젝트 관리</h1><p class="sub">견적과 연결된 프로젝트의 진행 상태를 관리합니다.</p></div><button class="primary" id="new-project">＋ 새 프로젝트</button></div><div class="project-kpis"><div class="panel"><span>전체 프로젝트</span><strong>${projects.length}건</strong></div><div class="panel"><span>진행 중</span><strong>3건</strong></div><div class="panel"><span>계약 금액</span><strong>₩ 26.6백만</strong></div><div class="panel"><span>완료율</span><strong>20%</strong></div></div><section class="panel project-panel"><div class="panel-head"><div><h2>프로젝트 목록</h2><p>상태를 기준으로 진행 상황을 확인하세요.</p></div><select id="project-filter"><option>전체 상태</option><option>상담중</option><option>견적발송</option><option>계약</option><option>시공중</option><option>완료</option></select></div><div class="project-list" id="project-list">${projects.map((p, i) => `<article class="project-row" data-status="${p[2]}"><div class="project-symbol ${colors[p[2]]}">${String(i + 1).padStart(2, '0')}</div><div class="project-main"><strong>${p[0]}</strong><span>${p[1]} · 최종 업데이트 ${p[4]}</span></div><strong class="project-price">${p[3]}</strong><span class="project-status ${colors[p[2]]}">${p[2]}</span><button class="project-open">열기 →</button></article>`).join('')}</div></section><button class="secondary" id="back-dashboard-project">← 대시보드</button>`;
+    document.querySelector('#project-filter').addEventListener('change', (e) => document.querySelectorAll('.project-row').forEach((row) => { row.style.display = e.target.value === '전체 상태' || row.dataset.status === e.target.value ? 'grid' : 'none'; }));
+    document.querySelector('#back-dashboard-project').addEventListener('click', () => { content.innerHTML = dashboard; setActive('대시보드'); bindDashboard(); });
+    document.querySelector('#new-project').addEventListener('click', () => alert('새 프로젝트 입력 화면은 견적 연결 단계에서 추가합니다.'));
+  }
+  function bindDashboard() { document.querySelector('.mobile-menu')?.addEventListener('click', () => alert('모바일 메뉴는 다음 단계에서 연결합니다.')); document.querySelector('.primary')?.addEventListener('click', renderQuote); nav.forEach((item) => item.addEventListener('click', (e) => { if (item.textContent.includes('견적 관리')) { e.preventDefault(); renderQuote(); } if (item.textContent.includes('프로젝트')) { e.preventDefault(); renderProjects(); } })); }
   bindDashboard();
 })();
