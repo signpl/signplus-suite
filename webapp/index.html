@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Signplus Suite Web</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark">+</span><span>Signplus<span class="brand-soft"> Suite</span></span></div>
+        <nav>
+          <a class="nav-item active" href="#"><span>⌂</span> 대시보드</a>
+          <a class="nav-item" href="#quotes"><span>▤</span> 견적 관리</a>
+          <a class="nav-item" href="#projects"><span>□</span> 프로젝트</a>
+          <a class="nav-item" href="#clients"><span>♙</span> 거래처</a>
+          <a class="nav-item" href="#prices"><span>₩</span> 단가표</a>
+        </nav>
+        <div class="sidebar-bottom"><a class="nav-item" href="#settings"><span>⚙</span> 설정</a><div class="sync"><i></i><span>NAS 연결 준비</span></div></div>
+      </aside>
+      <main class="main-content">
+        <header class="topbar"><button class="mobile-menu" aria-label="메뉴">☰</button><div class="breadcrumb">Signplus Suite <span>/</span> 대시보드</div><div class="top-actions"><button class="icon-btn">⌕</button><button class="icon-btn">🔔<b></b></button><div class="user"><div class="avatar">SP</div><div><strong>Signplus</strong><small>관리자</small></div><span>⌄</span></div></div></header>
+        <section class="content">
+          <div class="welcome"><div><p class="eyebrow">MONDAY, JULY 21, 2026</p><h1>안녕하세요, Signplus님 <span>👋</span></h1><p class="sub">오늘도 효율적인 업무를 시작해보세요.</p></div><button class="primary" onclick="alert('새 견적 화면은 다음 단계에서 연결합니다.')">＋ 새 견적 만들기</button></div>
+          <div class="stats"><div class="stat-card"><div class="stat-icon orange">▤</div><div><span>이번 달 견적</span><strong>24<em>건</em></strong><small class="up">↑ 12.5% <i>지난달 대비</i></small></div></div><div class="stat-card"><div class="stat-icon blue">□</div><div><span>진행 중 프로젝트</span><strong>8<em>건</em></strong><small>이번 주 업데이트 3건</small></div></div><div class="stat-card"><div class="stat-icon green">₩</div><div><span>이번 달 예상 매출</span><strong>₩ 18.6<em>백만</em></strong><small class="up">↑ 8.2% <i>지난달 대비</i></small></div></div><div class="stat-card"><div class="stat-icon purple">♙</div><div><span>등록 거래처</span><strong>42<em>곳</em></strong><small>신규 거래처 2곳</small></div></div></div>
+          <div class="grid"><section class="panel chart-panel"><div class="panel-head"><div><h2>견적 현황</h2><p>최근 6개월 견적 및 수주 추이</p></div><select><option>최근 6개월</option></select></div><div class="chart"><div class="y-labels"><span>40</span><span>30</span><span>20</span><span>10</span><span>0</span></div><div class="plot"><div class="gridline"></div><div class="gridline"></div><div class="gridline"></div><div class="gridline"></div><div class="gridline"></div><svg viewBox="0 0 600 190" preserveAspectRatio="none"><path class="area" d="M0 145 L120 115 L240 128 L360 78 L480 92 L600 42 L600 190 L0 190Z"/><path class="line" d="M0 145 L120 115 L240 128 L360 78 L480 92 L600 42"/></svg><div class="months"><span>2월</span><span>3월</span><span>4월</span><span>5월</span><span>6월</span><span>7월</span></div></div></div><div class="legend"><span><i class="dot orange-dot"></i> 전체 견적</span><span><i class="dot blue-dot"></i> 수주 완료</span></div></section><section class="panel activity"><div class="panel-head"><div><h2>최근 활동</h2><p>업무 업데이트를 한눈에 확인하세요</p></div><a href="#">전체 보기 →</a></div><div class="activity-list"><div><i class="activity-icon orange">₩</i><p><strong>새 견적이 등록되었습니다</strong><span>카페 오프화이트 간판 제작</span><small>10분 전</small></p></div><div><i class="activity-icon blue">□</i><p><strong>프로젝트 상태가 변경되었습니다</strong><span>강남구청 외벽 LED 사인 · 진행 중</span><small>1시간 전</small></p></div><div><i class="activity-icon green">✓</i><p><strong>견적이 수주 완료되었습니다</strong><span>성수동 쇼룸 채널사인</span><small>어제</small></p></div><div><i class="activity-icon purple">♙</i><p><strong>새 거래처가 등록되었습니다</strong><span>주식회사 라이트웍스</span><small>어제</small></p></div></div></section></div>
+          <section class="panel quotes"><div class="panel-head"><div><h2>최근 견적</h2><p>최근 작성된 견적서입니다</p></div><a href="#quotes">견적 관리 →</a></div><div class="table-wrap"><table><thead><tr><th>견적번호</th><th>거래처</th><th>프로젝트명</th><th>금액</th><th>상태</th><th>작성일</th></tr></thead><tbody><tr><td class="quote-no">QT-260721-024</td><td>카페 오프화이트</td><td>외부 돌출간판 제작</td><td>₩ 2,450,000</td><td><span class="status draft">작성 중</span></td><td>2026.07.21</td></tr><tr><td class="quote-no">QT-260720-023</td><td>성수동 쇼룸</td><td>채널사인 및 내부 사인</td><td>₩ 6,800,000</td><td><span class="status won">수주 완료</span></td><td>2026.07.20</td></tr><tr><td class="quote-no">QT-260718-022</td><td>라이트웍스</td><td>옥외 LED 전광판</td><td>₩ 12,300,000</td><td><span class="status sent">전송 완료</span></td><td>2026.07.18</td></tr></tbody></table></div></section>
+        </section>
+      </main>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>
